@@ -1,0 +1,6 @@
+# Hide sensitive data
+.env
+
+# Ignore generated files
+Version.txt
+Pokemon.csv
