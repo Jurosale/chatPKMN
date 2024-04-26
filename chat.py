@@ -1,12 +1,14 @@
 import os
 
 from dotenv import load_dotenv
-from langchain_community.document_loaders import WebBaseLoader
+from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
 from langchain_community.vectorstores import Chroma
 from langchain_core.output_parsers import BaseOutputParser
 from langchain_core.prompts.chat import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from pyhtml2pdf import converter
+
 
 import create_pokemon_csv as PKMN_CSV
 
@@ -120,7 +122,7 @@ if __name__ == "__main__":
                 # Print this statement to buy some time while loading the chosen pokemon's web data
                 print(f"\nContacting {user_pokemon_data[PKMN_CSV.CSV_NAME_KEY]}...")
                 
-                # TODO: Look into and fix csv loading issue?
+                # TODO: Look into and fix csv/pdf loading issue?
                 # The links list comes back as a string when uploading csv data unfortunately...fixing it here
                 formatted_links_list = user_pokemon_data[PKMN_CSV.CSV_LINKS_KEY][1:-1].replace("'","").split(", ")
                 web_paths.extend(formatted_links_list)
@@ -129,20 +131,34 @@ if __name__ == "__main__":
                     web_paths=(web_paths),
                     requests_per_second=2
                 )
-                web_data = loader.load()
+                all_data = loader.load()
+
+                # Remove files in PDF folder before continuing
+                for file in os.listdir(PKMN_CSV.PDF_DIR):
+                    file_path = os.path.join(PKMN_CSV.PDF_DIR, file)
+                    os.remove(file_path)
+
+                # The pdf links list also comes back as a string when uploading csv data unfortunately...fixing it here
+                formatted_pdf_links_list = user_pokemon_data[PKMN_CSV.CSV_PDF_LINKS_KEY][1:-1].replace("'","").split(", ")
+                for pdf_link in formatted_pdf_links_list:
+                    pdf_file_path = os.path.join(PKMN_CSV.PDF_DIR, user_pokemon_data[PKMN_CSV.CSV_NAME_KEY] + '.pdf')
+                    converter.convert(pdf_link, pdf_file_path)
+                    # Load content from the generated PDF(s)
+                    curr_loader = PyPDFLoader(pdf_file_path)
+                    all_data += curr_loader.load()
 
                 # Split data into chunks for easier lookup
                 text_splitter = RecursiveCharacterTextSplitter(
                     chunk_size=1000, chunk_overlap=200, add_start_index=True
                 )
-                split_web_data = text_splitter.split_documents(web_data)
+                split_all_data = text_splitter.split_documents(all_data)
 
                 # Store in a vector database for easier querying
-                vectorstore = Chroma.from_documents(documents=split_web_data, embedding=OpenAIEmbeddings())
+                vectorstore = Chroma.from_documents(documents=split_all_data, embedding=OpenAIEmbeddings())
 
                 # Set the retriever and filtering parameters
                 retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 20})
-                
+
                 # TODO: Figure how out how to get OpenAI to consistently start with this intro so I don't need to hardcode it here!
                 # Always start with this Intro:
                 intro_text = f"Hello, my name is {user_pokemon_data[PKMN_CSV.CSV_NAME_KEY]}. I am a {user_pokemon_data[PKMN_CSV.CSV_TYPE_KEY]} type pokemon from gen {user_pokemon_data[PKMN_CSV.CSV_GEN_KEY]}. What would you like to ask me?"
@@ -164,6 +180,13 @@ if __name__ == "__main__":
         while not user_input:
             user_input = input("  -> ")
 
+        # Convert retriever obj's content into a list of strings to better
+        # append to prompt as additional context when generating a response
+        relevant_context = ""
+        relevant_docs = retriever.invoke(user_input)
+        for idx, doc in enumerate(relevant_docs):
+            relevant_context += f"{idx+1}. {doc.page_content}\n"
+
         # Insert prompt, input and formmatting into chat model and print the response
         response_count += 1
         chain = chat_prompt | chat_model | CustomParser()
@@ -174,7 +197,7 @@ if __name__ == "__main__":
             "text":user_input,
             "end_phrase":ENDING_PHRASE,
             "count":response_count,
-            "context":retriever,
+            "context":relevant_context,
             "chat_history":"\n".join(chat_history)}
         )
         print(result)
