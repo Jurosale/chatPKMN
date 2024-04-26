@@ -6,8 +6,10 @@ from langchain_community.document_loaders import WebBaseLoader
 
 
 DIR = os.path.dirname(__file__)
+PDF_DIR = os.path.join(DIR, "PDFs")
 CSV_FILE_PATH = os.path.join(DIR, "Pokemon.csv")
 VERSION_FILE_PATH = os.path.join(DIR, "Version.txt")
+BULBAPEDIA_FILE_PATH = os.path.join(DIR, "Bulbapedia_Source_Code.txt")
 
 CSV_ID_KEY = "ID"
 CSV_NAME_KEY = "Name"
@@ -15,7 +17,8 @@ CSV_TYPE_KEY = "Type"
 CSV_SPEECH_KEY = "Speech"
 CSV_GEN_KEY = "Generation"
 CSV_LINKS_KEY = "Links"
-CSV_FIELDS =  [CSV_ID_KEY,CSV_NAME_KEY,CSV_TYPE_KEY,CSV_SPEECH_KEY,CSV_GEN_KEY,CSV_LINKS_KEY]
+CSV_PDF_LINKS_KEY = "PDF_Links"
+CSV_FIELDS =  [CSV_ID_KEY,CSV_NAME_KEY,CSV_TYPE_KEY,CSV_SPEECH_KEY,CSV_GEN_KEY,CSV_LINKS_KEY,CSV_PDF_LINKS_KEY]
 
 POKEMON_TYPES = ["normal", "fire", "water", "electric", "grass", "ice", "fighting", "poison",
 "ground", "flying", "psychic", "bug", "rock", "ghost", "dragon", "dark", "steel", "fairy"]
@@ -26,9 +29,10 @@ PKMN_TALK_WEB_PATH = "https://pallettown.fandom.com/wiki/Talking_Pok%C3%A9mon"
 SPLIT_PKMN_LIST_STR = "<div class=\"infocard\"><span class=\"infocard-lg-img\">"
 SPLIT_PKMN_DATA_STR = "<a class=\"ent-name\" href=\"/pokedex/"
 SPLIT_PKMN_TYPE_STR = "<a class=\"itype "
+SPLIT_BULBA_LIST_STR = "<td><a href=\"{\\field{\\*\\fldinst{HYPERLINK \""
 
 # Increment this everytime there are csv changes or updates from data websites
-CURRENT_VERSION = 1
+CURRENT_VERSION = 2
 
 
 class PokemonData():
@@ -89,6 +93,9 @@ class PokemonData():
         if os.path.exists(VERSION_FILE_PATH):
             os.remove(VERSION_FILE_PATH)
 
+        if not os.path.isdir(PDF_DIR):
+            os.mkdir(PDF_DIR)
+
         with open(CSV_FILE_PATH, 'w') as f:
             writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
             writer.writeheader()
@@ -132,6 +139,21 @@ class PokemonData():
                 entry = entry[:start_char_idx] + entry[end_char_idx+1:]
                 start_char_idx = entry.find("<")
             talk_data_list.append(entry.lower())
+
+        # Now as a workaround to needing permission to access Bulbapedia's website:
+        # retrieve pokemon links from Bulbapedia's list of pokemon (source code)
+        # and store them to later convert them into PDFs to extract their content
+        pdf_links = []
+        f = open(BULBAPEDIA_FILE_PATH, "r")
+        parsed_pokemon_links = f.read().split(SPLIT_BULBA_LIST_STR)[1:]
+        # All parsed data here has the exact same format:
+        # [pokemon_link]"...
+        for pokemon_link in parsed_pokemon_links:
+            end_idx = pokemon_link.find("\"")
+            pdf_link = pokemon_link[:end_idx]
+            # Don't include any duplicate links
+            if pdf_link not in pdf_links:
+                pdf_links.append(pdf_link)
 
         # Next, get list of all current pokemon from the online pokemondb database
         # website and filter out website content to just pokemon names and types
@@ -190,30 +212,33 @@ class PokemonData():
                     if type.lower() not in POKEMON_TYPES:
                         raise Exception(f"{type} is not a valid type.")
                 
-                # Lastly, use talking pokemon data to determine speech attribute
+                # Next, use talking pokemon data to determine speech attribute
                 # Due to how this data is currently parsed, oddly-specific conditions are needed to ensure proper labeling
                 pokemon_speech = "noise"
                 pokemon_name_lowercase = pokemon_name.lower()
 
                 # Specifically skip Mew since it otherwise gets mislabeled with Mewtwo's speech value
-                if pokemon_name_lowercase == "mew":
-                    continue
+                if pokemon_name_lowercase != "mew":
+                    # If current pokemon is mentioned in talk data, find it's correct speech value
+                    for talk_data in talk_data_list:
+                        if pokemon_name_lowercase in talk_data:
+                            # Edge Case: some talking pokemon have "without telepathy" in their description
+                            if "without telepathy" in talk_data:
+                                pokemon_speech = "talk"
 
-                # If current pokemon is mentioned in talk data, find it's correct speech value
-                for talk_data in talk_data_list:
-                    if pokemon_name_lowercase in talk_data:
-                        # Edge Case: some talking pokemon have "without telepathy" in their description
-                        if "without telepathy" in talk_data:
-                            pokemon_speech = "talk"
+                            # Any mentions of "telepath" means the pokemon speaks through telepathy
+                            # Edge Case: Sometimes telepathy is implied with "talk through meowth"
+                            elif ("telepath" in talk_data or "talk through meowth" in talk_data) and pokemon_speech != "talk":
+                                pokemon_speech = "telepathy"
 
-                        # Any mentions of "telepath" means the pokemon speaks through telepathy
-                        # Edge Case: Sometimes telepathy is implied with "talk through meowth"
-                        elif ("telepath" in talk_data or "talk through meowth" in talk_data) and pokemon_speech != "talk":
-                            pokemon_speech = "telepathy"
+                            # If there's no mention of "telepathy", then the pokemon can actually speak
+                            else:
+                                pokemon_speech = "talk"
 
-                        # If there's no mention of "telepathy", then the pokemon can actually speak
-                        else:
-                            pokemon_speech = "talk"
+                # Lastly, grab the current pokemon's pdf link. Since the pdf link list is already
+                # in pokedex order, just pop the current top link from the list
+                pokemon_pdf_link = []
+                pokemon_pdf_link.append(pdf_links.pop(0))
 
                 # Now package it into a nice dict and append to pokemon list
                 dict_data = {
@@ -222,7 +247,8 @@ class PokemonData():
                     CSV_TYPE_KEY:pokemon_type,
                     CSV_SPEECH_KEY:pokemon_speech,
                     CSV_GEN_KEY:gen,
-                    CSV_LINKS_KEY:pokemon_name_entry(pokemon_url,id)
+                    CSV_LINKS_KEY:pokemon_name_entry(pokemon_url,id),
+                    CSV_PDF_LINKS_KEY:pokemon_pdf_link
                 }
                 pokemon_data.append(dict_data)
 
