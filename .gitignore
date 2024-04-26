@@ -4,3 +4,6 @@
 # Ignore generated files
 Version.txt
 Pokemon.csv
+
+# Ignore generated folders
+PDFs/
