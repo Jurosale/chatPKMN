@@ -38,6 +38,9 @@ class CustomParser(BaseOutputParser):
 
 
 if __name__ == "__main__":
+    # Print this statement to buy some time while setting up data & model
+    print("Contacting PokeDex...")
+
     # Load up hidden API key located in a different
     # file and set up chatbot model
     load_dotenv()
