@@ -1,13 +1,15 @@
 import os
 
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
-from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
+from langchain_community.document_loaders import PyPDFLoader, TextLoader, WebBaseLoader
 from langchain_community.vectorstores import Chroma
 from langchain_core.output_parsers import BaseOutputParser
 from langchain_core.prompts.chat import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pyhtml2pdf import converter
+import requests
 
 
 import create_pokemon_csv as PKMN_CSV
@@ -125,7 +127,7 @@ if __name__ == "__main__":
                 # Print this statement to buy some time while loading the chosen pokemon's web data
                 print(f"\nContacting {user_pokemon_data[PKMN_CSV.CSV_NAME_KEY]}...")
                 
-                # TODO: Look into and fix csv/pdf loading issue?
+                # TODO: Look into and fix csv/extra files loading issue?
                 # The links list comes back as a string when uploading csv data unfortunately...fixing it here
                 formatted_links_list = user_pokemon_data[PKMN_CSV.CSV_LINKS_KEY][1:-1].replace("'","").split(", ")
                 web_paths.extend(formatted_links_list)
@@ -136,18 +138,25 @@ if __name__ == "__main__":
                 )
                 all_data = loader.load()
 
-                # Remove files in PDF folder before continuing
-                for file in os.listdir(PKMN_CSV.PDF_DIR):
-                    file_path = os.path.join(PKMN_CSV.PDF_DIR, file)
+                # Remove files in extra files folder before continuing
+                for file in os.listdir(PKMN_CSV.EXTRA_FILES_DIR):
+                    file_path = os.path.join(PKMN_CSV.EXTRA_FILES_DIR, file)
                     os.remove(file_path)
 
-                # The pdf links list also comes back as a string when uploading csv data unfortunately...fixing it here
-                formatted_pdf_links_list = user_pokemon_data[PKMN_CSV.CSV_PDF_LINKS_KEY][1:-1].replace("'","").split(", ")
-                for pdf_link in formatted_pdf_links_list:
-                    pdf_file_path = os.path.join(PKMN_CSV.PDF_DIR, user_pokemon_data[PKMN_CSV.CSV_NAME_KEY] + '.pdf')
-                    converter.convert(pdf_link, pdf_file_path)
-                    # Load content from the generated PDF(s)
-                    curr_loader = PyPDFLoader(pdf_file_path)
+                # Since these links have access restrictions, grab content via HTTP requests instead of WebBaseLoader
+                # The other links list also comes back as a string when uploading csv data unfortunately...fixing it here
+                formatted_other_links_list = user_pokemon_data[PKMN_CSV.CSV_OTHER_LINKS_KEY][1:-1].replace("'","").split(", ")
+                for other_link in formatted_other_links_list:
+                    # Get content from link and remove HTML characters
+                    response = requests.get(other_link)
+                    soup = BeautifulSoup(response.text, "html.parser")
+                    text_data = soup.get_text()
+
+                    # Write data as a text file and append its content into the document object
+                    other_file_path = os.path.join(PKMN_CSV.EXTRA_FILES_DIR, user_pokemon_data[PKMN_CSV.CSV_NAME_KEY] + '.txt')
+                    with open(other_file_path, "w") as f:
+                        f.write(text_data)
+                    curr_loader = TextLoader(other_file_path)
                     all_data += curr_loader.load()
 
                 # Split data into chunks for easier lookup

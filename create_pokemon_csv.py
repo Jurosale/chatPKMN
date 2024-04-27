@@ -1,12 +1,12 @@
 import csv
 import os
 
-import bs4
+from bs4 import SoupStrainer
 from langchain_community.document_loaders import WebBaseLoader
 
 
 DIR = os.path.dirname(__file__)
-PDF_DIR = os.path.join(DIR, "PDFs")
+EXTRA_FILES_DIR = os.path.join(DIR, "Extra_Files")
 CSV_FILE_PATH = os.path.join(DIR, "Pokemon.csv")
 VERSION_FILE_PATH = os.path.join(DIR, "Version.txt")
 BULBAPEDIA_FILE_PATH = os.path.join(DIR, "Bulbapedia_Source_Code.txt")
@@ -17,8 +17,8 @@ CSV_TYPE_KEY = "Type"
 CSV_SPEECH_KEY = "Speech"
 CSV_GEN_KEY = "Generation"
 CSV_LINKS_KEY = "Links"
-CSV_PDF_LINKS_KEY = "PDF_Links"
-CSV_FIELDS =  [CSV_ID_KEY,CSV_NAME_KEY,CSV_TYPE_KEY,CSV_SPEECH_KEY,CSV_GEN_KEY,CSV_LINKS_KEY,CSV_PDF_LINKS_KEY]
+CSV_OTHER_LINKS_KEY = "Other_Links"
+CSV_FIELDS =  [CSV_ID_KEY,CSV_NAME_KEY,CSV_TYPE_KEY,CSV_SPEECH_KEY,CSV_GEN_KEY,CSV_LINKS_KEY,CSV_OTHER_LINKS_KEY]
 
 POKEMON_TYPES = ["normal", "fire", "water", "electric", "grass", "ice", "fighting", "poison",
 "ground", "flying", "psychic", "bug", "rock", "ghost", "dragon", "dark", "steel", "fairy"]
@@ -32,7 +32,7 @@ SPLIT_PKMN_TYPE_STR = "<a class=\"itype "
 SPLIT_BULBA_LIST_STR = "<td><a href=\"{\\field{\\*\\fldinst{HYPERLINK \""
 
 # Increment this everytime there are csv changes or updates from data websites
-CURRENT_VERSION = 2
+CURRENT_VERSION = 3
 
 
 class PokemonData():
@@ -93,8 +93,8 @@ class PokemonData():
         if os.path.exists(VERSION_FILE_PATH):
             os.remove(VERSION_FILE_PATH)
 
-        if not os.path.isdir(PDF_DIR):
-            os.mkdir(PDF_DIR)
+        if not os.path.isdir(EXTRA_FILES_DIR):
+            os.mkdir(EXTRA_FILES_DIR)
 
         with open(CSV_FILE_PATH, 'w') as f:
             writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
@@ -115,7 +115,7 @@ class PokemonData():
         pokemon_data = []
 
         # Start by grabbing special pokemon speech data from a specific website since it will be needed later
-        bs4_filter = bs4.SoupStrainer("ul")
+        bs4_filter = SoupStrainer("ul")
         loader = WebBaseLoader(
             web_path=(PKMN_TALK_WEB_PATH),
             bs_kwargs={"parse_only": bs4_filter}
@@ -142,25 +142,25 @@ class PokemonData():
 
         # Now as a workaround to needing permission to access Bulbapedia's website:
         # retrieve pokemon links from Bulbapedia's list of pokemon (source code)
-        # and store them to later convert them into PDFs to extract their content
-        pdf_links = []
+        # and store them to later extract their content in a different manner
+        other_links = []
         f = open(BULBAPEDIA_FILE_PATH, "r")
         parsed_pokemon_links = f.read().split(SPLIT_BULBA_LIST_STR)[1:]
         # All parsed data here has the exact same format:
         # [pokemon_link]"...
         for pokemon_link in parsed_pokemon_links:
             end_idx = pokemon_link.find("\"")
-            pdf_link = pokemon_link[:end_idx]
+            other_link = pokemon_link[:end_idx]
             # Don't include any duplicate links
-            if pdf_link not in pdf_links:
-                pdf_links.append(pdf_link)
+            if other_link not in other_links:
+                other_links.append(other_link)
 
         # Next, get list of all current pokemon from the online pokemondb database
         # website and filter out website content to just pokemon names and types
         class_types = ["itype " + x for x in POKEMON_TYPES]
         class_types.append("ent-name")
         class_types.append("infocard-list infocard-list-pkmn-lg")
-        bs4_filter = bs4.SoupStrainer(class_=(class_types))
+        bs4_filter = SoupStrainer(class_=(class_types))
         loader = WebBaseLoader(
             web_path=(PKMN_DB_WEB_PATH),
             bs_kwargs={"parse_only": bs4_filter}
@@ -235,10 +235,10 @@ class PokemonData():
                             else:
                                 pokemon_speech = "talk"
 
-                # Lastly, grab the current pokemon's pdf link. Since the pdf link list is already
+                # Lastly, grab the current pokemon's other link. Since the other link list is already
                 # in pokedex order, just pop the current top link from the list
-                pokemon_pdf_link = []
-                pokemon_pdf_link.append(pdf_links.pop(0))
+                pokemon_other_link = []
+                pokemon_other_link.append(other_links.pop(0))
 
                 # Now package it into a nice dict and append to pokemon list
                 dict_data = {
@@ -248,7 +248,7 @@ class PokemonData():
                     CSV_SPEECH_KEY:pokemon_speech,
                     CSV_GEN_KEY:gen,
                     CSV_LINKS_KEY:pokemon_name_entry(pokemon_url,id),
-                    CSV_PDF_LINKS_KEY:pokemon_pdf_link
+                    CSV_OTHER_LINKS_KEY:pokemon_other_link
                 }
                 pokemon_data.append(dict_data)
 
