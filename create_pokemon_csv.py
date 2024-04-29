@@ -1,15 +1,15 @@
 import csv
 import os
 
-from bs4 import SoupStrainer
+from bs4 import BeautifulSoup, SoupStrainer
 from langchain_community.document_loaders import WebBaseLoader
+import requests
 
 
 DIR = os.path.dirname(__file__)
 EXTRA_FILES_DIR = os.path.join(DIR, "Extra_Files")
 CSV_FILE_PATH = os.path.join(DIR, "Pokemon.csv")
 VERSION_FILE_PATH = os.path.join(DIR, "Version.txt")
-BULBAPEDIA_FILE_PATH = os.path.join(DIR, "Bulbapedia_Source_Code.txt")
 
 CSV_ID_KEY = "ID"
 CSV_NAME_KEY = "Name"
@@ -25,14 +25,15 @@ POKEMON_TYPES = ["normal", "fire", "water", "electric", "grass", "ice", "fightin
 
 PKMN_DB_WEB_PATH = "https://pokemondb.net/pokedex/national"
 PKMN_TALK_WEB_PATH = "https://pallettown.fandom.com/wiki/Talking_Pok%C3%A9mon"
+PKMN_BULBA_WEB_PATH = "https://bulbapedia.bulbagarden.net/wiki/List_of_Pok%C3%A9mon_by_National_Pok%C3%A9dex_number"
 
 SPLIT_PKMN_LIST_STR = "<div class=\"infocard\"><span class=\"infocard-lg-img\">"
 SPLIT_PKMN_DATA_STR = "<a class=\"ent-name\" href=\"/pokedex/"
 SPLIT_PKMN_TYPE_STR = "<a class=\"itype "
-SPLIT_BULBA_LIST_STR = "<td><a href=\"{\\field{\\*\\fldinst{HYPERLINK \""
+SPLIT_BULBA_LIST_STR = "<td><a href=\""
 
 # Increment this everytime there are csv changes or updates from data websites
-CURRENT_VERSION = 3
+CURRENT_VERSION = 4
 
 
 class PokemonData():
@@ -141,16 +142,22 @@ class PokemonData():
             talk_data_list.append(entry.lower())
 
         # Now as a workaround to needing permission to access Bulbapedia's website:
-        # retrieve pokemon links from Bulbapedia's list of pokemon (source code)
+        # retrieve pokemon links from Bulbapedia's list of pokemon using an HTTP request
         # and store them to later extract their content in a different manner
         other_links = []
-        f = open(BULBAPEDIA_FILE_PATH, "r")
-        parsed_pokemon_links = f.read().split(SPLIT_BULBA_LIST_STR)[1:]
+        response = requests.get(PKMN_BULBA_WEB_PATH)
+        soup = BeautifulSoup(response.text, "html.parser")
+        bulba_data = ""
+        # All bulbapedia's pokemon links exist within "td" tags
+        for data in soup.find_all("td"):
+            bulba_data += str(data)
+        parsed_pokemon_links = bulba_data.split(SPLIT_BULBA_LIST_STR)[1:]
         # All parsed data here has the exact same format:
         # [pokemon_link]"...
         for pokemon_link in parsed_pokemon_links:
             end_idx = pokemon_link.find("\"")
-            other_link = pokemon_link[:end_idx]
+            sublink = pokemon_link[:end_idx]
+            other_link = pokemon_name_entry_bulbapedia(sublink)
             # Don't include any duplicate links
             if other_link not in other_links:
                 other_links.append(other_link)
@@ -272,6 +279,10 @@ def pokemon_name_entry(name: str, id: int) -> list:
     websites.append("https://sg.portal-pokemon.com/play/pokedex/" + str_num_formmatted)
 
     return websites
+
+
+def pokemon_name_entry_bulbapedia(name: str) -> str:
+    return "https://bulbapedia.bulbagarden.net" + name
 
 
 # Keeping this just in case it's needed later
