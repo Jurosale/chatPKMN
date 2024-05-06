@@ -39,7 +39,7 @@ class CustomParser(BaseOutputParser):
             formatted_text = "*" + user_pokemon_data[PKMN_CSV.CSV_NAME_KEY] + " noises* (" + formatted_text + ")"
 
         # Format should always be: [pokemon_name]([pokedex_id]): speech
-        return "\n" + user_pokemon_data[PKMN_CSV.CSV_NAME_KEY] + " (#" + user_pokemon_data[PKMN_CSV.CSV_ID_KEY] + "): " + formatted_text
+        return "\n" + user_pokemon_data[PKMN_CSV.CSV_NAME_KEY] + " (#" + str(user_pokemon_data[PKMN_CSV.CSV_ID_KEY]) + "): " + formatted_text
 
 
 # Perfroms a DFS of the trie to retrieve every full string name
@@ -172,12 +172,8 @@ if __name__ == "__main__":
             if user_pokemon_data:
                 # Print this statement to buy some time while loading the chosen pokemon's web data
                 print(f"\nContacting {user_pokemon_data[PKMN_CSV.CSV_NAME_KEY]}...")
-                
-                # TODO: Look into and fix csv/extra files loading issue?
-                # The links list comes back as a string when uploading csv data unfortunately...fixing it here
-                formatted_links_list = user_pokemon_data[PKMN_CSV.CSV_LINKS_KEY][1:-1].replace("'","").split(", ")
-                web_paths.extend(formatted_links_list)
 
+                web_paths.extend(user_pokemon_data[PKMN_CSV.CSV_LINKS_KEY])
                 loader = WebBaseLoader(
                     web_paths=(web_paths),
                     requests_per_second=2
@@ -190,9 +186,7 @@ if __name__ == "__main__":
                     os.remove(file_path)
 
                 # Since these links have access restrictions, grab content via HTTP requests instead of WebBaseLoader
-                # The other links list also comes back as a string when uploading csv data unfortunately...fixing it here
-                formatted_other_links_list = user_pokemon_data[PKMN_CSV.CSV_OTHER_LINKS_KEY][1:-1].replace("'","").split(", ")
-                for other_link in formatted_other_links_list:
+                for other_link in user_pokemon_data[PKMN_CSV.CSV_OTHER_LINKS_KEY]:
                     # Get content from link and remove HTML characters
                     response = requests.get(other_link)
                     soup = BeautifulSoup(response.text, "html.parser")
@@ -219,7 +213,7 @@ if __name__ == "__main__":
 
                 # TODO: Figure how out how to get OpenAI to consistently start with this intro so I don't need to hardcode it here!
                 # Always start with this Intro:
-                intro_text = f"Hello, my name is {user_pokemon_data[PKMN_CSV.CSV_NAME_KEY]}. I am a {user_pokemon_data[PKMN_CSV.CSV_TYPE_KEY]} type pokemon from gen {user_pokemon_data[PKMN_CSV.CSV_GEN_KEY]}. What would you like to ask me?"
+                intro_text = f"Hello, my name is {user_pokemon_data[PKMN_CSV.CSV_NAME_KEY]}. I am a {user_pokemon_data[PKMN_CSV.CSV_TYPE_KEY]} type pokemon from gen {str(user_pokemon_data[PKMN_CSV.CSV_GEN_KEY])}. What would you like to ask me?"
                 
                 # If pokemon speaks telepathically, showcase it
                 if user_pokemon_data[PKMN_CSV.CSV_SPEECH_KEY] == "telepathy":
@@ -228,7 +222,7 @@ if __name__ == "__main__":
                 elif user_pokemon_data[PKMN_CSV.CSV_SPEECH_KEY] == "noise":
                     intro_text = "*" + user_pokemon_data[PKMN_CSV.CSV_NAME_KEY] + " noises* (" + intro_text + ")"
 
-                print(f"\n{user_pokemon_data[PKMN_CSV.CSV_NAME_KEY]} (#{user_pokemon_data[PKMN_CSV.CSV_ID_KEY]}): {intro_text}")
+                print(f"\n{user_pokemon_data[PKMN_CSV.CSV_NAME_KEY]} (#{str(user_pokemon_data[PKMN_CSV.CSV_ID_KEY])}): {intro_text}")
 
         if not is_running:
             break

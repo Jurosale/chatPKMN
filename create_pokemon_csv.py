@@ -72,6 +72,12 @@ class PokemonData():
                 pokemon_count = 0
                 self.csv_data = []
                 for data in csv.DictReader(f):
+                    # Unfortunately csv.writer converted all values into strings, fixing that here
+                    data[CSV_ID_KEY] = int(data[CSV_ID_KEY])
+                    data[CSV_GEN_KEY] = int(data[CSV_GEN_KEY])
+                    data[CSV_LINKS_KEY] = data[CSV_LINKS_KEY][1:-1].replace("'","").split(", ")
+                    data[CSV_OTHER_LINKS_KEY] = data[CSV_OTHER_LINKS_KEY][1:-1].replace("'","").split(", ")
+
                     self.csv_data.append(data)
                     pokemon_count += 1
                 self.max_pokemon = pokemon_count
@@ -119,10 +125,6 @@ class PokemonData():
         with open(NAMES_TRIE_FILE_PATH, 'w') as f:
             json_str = json.dumps(self.names_trie)
             f.write(json_str)
-
-        # TODO: Come up with a better fix
-        # This is gross but data must be loaded up the same way everytime to resolve consistency issues
-        self.load()
 
     def is_current_version(self) -> bool:
         return self.version == CURRENT_VERSION
