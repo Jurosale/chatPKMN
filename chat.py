@@ -1,7 +1,9 @@
 import os
+from random import sample
 
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+from getkey import getkey, keys
 from langchain_community.document_loaders import TextLoader, WebBaseLoader
 from langchain_community.vectorstores import Chroma
 from langchain_core.output_parsers import BaseOutputParser
@@ -13,7 +15,10 @@ import requests
 import create_pokemon_csv as PKMN_CSV
 
 
+SPECIAL_CHARS_IN_NAMES = [".", " ", "-"]
 ENDING_PHRASE = "Thank you for talking to me!"
+MAX_SUGGESTIONS = 10
+
 user_pokemon_data = {} # Need to make this global so parser class can access it
 
 
@@ -35,6 +40,28 @@ class CustomParser(BaseOutputParser):
 
         # Format should always be: [pokemon_name]([pokedex_id]): speech
         return "\n" + user_pokemon_data[PKMN_CSV.CSV_NAME_KEY] + " (#" + user_pokemon_data[PKMN_CSV.CSV_ID_KEY] + "): " + formatted_text
+
+
+# Perfroms a DFS of the trie to retrieve every full string name
+# it can find based on the provided prefix string
+def get_suggestions(input: str, trie_dict: dict) -> list[str]:
+    def _recursive_search(curr_str: str, curr_trie_dict: dict, suggest: list[str]):
+        for next_char in curr_trie_dict.keys():
+            if next_char == PKMN_CSV.END_NAME_STR:
+                suggest.append(curr_str)
+            _recursive_search(curr_str+next_char, curr_trie_dict[next_char], suggest)
+
+    suggestions = []
+    curr_dict = trie_dict
+    for char in input:
+        if char not in curr_dict:
+            return suggestions
+        curr_dict = curr_dict[char]
+    _recursive_search(input, curr_dict, suggestions)
+
+    if len(suggestions) > MAX_SUGGESTIONS:
+        suggestions = sample(suggestions, MAX_SUGGESTIONS)
+    return suggestions
 
 
 if __name__ == "__main__":
@@ -93,22 +120,42 @@ if __name__ == "__main__":
         # Ensure a pokemon is selected to converse with
         while not user_pokemon_data:
             web_paths = [PKMN_CSV.PKMN_DB_WEB_PATH]
-            user_input = input("\nPokeDex: Please type in the pokemon's name or pokedex number to get started or type 'exit' if you're done.\n  -> ")
-            if not user_input:
-                continue
-            elif "exit" in user_input:
-                is_running = False
+            print("\nPokeDex: Please type in the pokemon's name or pokedex number to get started, press the tab key for a "
+                + "suggestion based on current input or press the escape key to exit.")
+            user_input = ""
+            key = ""
+            # Use getKey() instead of input() to offer suggestions as the user types a name
+            while key != keys.ENTER:
+                print(f"  -> {user_input}", end='\r')
+                key = getkey()
+                if key == keys.ESC:
+                    is_running = False
+                    break
+                if key == keys.BACKSPACE:
+                    user_input = user_input[:-1]
+                    print(f"  -> {user_input} ", end='\r') # Put this here to fix lingering UI issue
+                elif key == keys.TAB:
+                    print(f"     {len(user_input)*" "}", end='\r') # Put this here to fix lingering UI issue
+                    suggestions = get_suggestions(user_input, pkmn_obj.names_trie)
+                    if suggestions:
+                        print(f"Suggestion(s): {", ".join(suggestions)}")
+                    else:
+                        print(f"Suggestions: None")
+                elif key.isalnum() or key in SPECIAL_CHARS_IN_NAMES:
+                    user_input += key
+
+            print("\n") # Put this here to fix missing newline UI issue
+            if not is_running:
                 break
+            elif not user_input:
+                continue
             # If user (only) typed in a number, check for pokemon by pokedex id
             elif user_input.isdigit():
                 int_val = int(user_input)
-                if int_val == 0 or int_val > pkmn_obj.max_pokemon:
-                    print(f"\nPokeDex: There is no such pokemon with that pokedex number. Try a number between 1 and {pkmn_obj.max_pokemon}.")
+                if int_val < 1 or int_val > pkmn_obj.max_pokemon:
+                    print(f"\nPokeDex: There is no such pokemon with pokedex number '{user_input}'. Try a number between 1 and {pkmn_obj.max_pokemon}.")
                     continue
-                for line in pkmn_obj.csv_data:
-                    if int_val == int(line[PKMN_CSV.CSV_ID_KEY]):
-                        user_pokemon_data = line
-                        break
+                user_pokemon_data = pkmn_obj.csv_data[int_val-1]
             # Else, check for pokemon by name
             else:
                 formatted_input = user_input.lower()
@@ -117,7 +164,7 @@ if __name__ == "__main__":
                         user_pokemon_data = line
                         break
                 if not user_pokemon_data:
-                    print("\nPokeDex: There is no such pokemon with that name.")
+                    print(f"\nPokeDex: There is no such pokemon named '{user_input}'.")
 
             # Once user has selected a valid pokemon, retrieve their additional data
             # and start up conversation with the chosen pokemon

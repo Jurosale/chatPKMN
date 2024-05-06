@@ -1,4 +1,5 @@
 import csv
+import json
 import os
 
 from bs4 import BeautifulSoup, SoupStrainer
@@ -10,6 +11,7 @@ DIR = os.path.dirname(__file__)
 EXTRA_FILES_DIR = os.path.join(DIR, "Extra_Files")
 CSV_FILE_PATH = os.path.join(DIR, "Pokemon.csv")
 VERSION_FILE_PATH = os.path.join(DIR, "Version.txt")
+NAMES_TRIE_FILE_PATH = os.path.join(DIR, "Names_Trie.json")
 
 CSV_ID_KEY = "ID"
 CSV_NAME_KEY = "Name"
@@ -32,8 +34,10 @@ SPLIT_PKMN_DATA_STR = "<a class=\"ent-name\" href=\"/pokedex/"
 SPLIT_PKMN_TYPE_STR = "<a class=\"itype "
 SPLIT_BULBA_LIST_STR = "<td><a href=\""
 
+END_NAME_STR = "\n"
+
 # Increment this everytime there are csv changes or updates from data websites
-CURRENT_VERSION = 4
+CURRENT_VERSION = 5
 
 
 class PokemonData():
@@ -41,6 +45,7 @@ class PokemonData():
     Object for holding all downloaded Pokemon data
     """
     csv_data: list[dict]
+    names_trie: dict
     max_pokemon: int
     _version: int
 
@@ -73,6 +78,9 @@ class PokemonData():
 
             with open(VERSION_FILE_PATH, mode ='r') as f:
                 self.version = int(f.read())
+
+            with open(NAMES_TRIE_FILE_PATH, mode ='r') as f:
+                self.names_trie = json.loads(f.read())
         except:
             if os.path.exists(CSV_FILE_PATH):
                 os.remove(CSV_FILE_PATH)
@@ -94,6 +102,9 @@ class PokemonData():
         if os.path.exists(VERSION_FILE_PATH):
             os.remove(VERSION_FILE_PATH)
 
+        if os.path.exists(NAMES_TRIE_FILE_PATH):
+            os.remove(NAMES_TRIE_FILE_PATH)
+
         if not os.path.isdir(EXTRA_FILES_DIR):
             os.mkdir(EXTRA_FILES_DIR)
 
@@ -104,6 +115,10 @@ class PokemonData():
 
         with open(VERSION_FILE_PATH, 'w') as f:
             f.write(str(CURRENT_VERSION))
+
+        with open(NAMES_TRIE_FILE_PATH, 'w') as f:
+            json_str = json.dumps(self.names_trie)
+            f.write(json_str)
 
         # TODO: Come up with a better fix
         # This is gross but data must be loaded up the same way everytime to resolve consistency issues
@@ -178,6 +193,7 @@ class PokemonData():
         # generations & urls from retrieving additional information
         id = 0
         gen = 0
+        trie = {}
         # Due to how this website is specifically parsed, the pokemon content is
         # grouped by generation and thus each section also needs to be iterated through
         for data in pkmndb_web_data.contents:
@@ -219,10 +235,19 @@ class PokemonData():
                     if type.lower() not in POKEMON_TYPES:
                         raise Exception(f"{type} is not a valid type.")
                 
+                # Add name to trie data structure for suggestion purposes
+                pokemon_name_lowercase = pokemon_name.lower()
+                curr_dict = trie
+                for char in pokemon_name_lowercase:
+                    if char not in curr_dict:
+                        curr_dict[char] = {}
+                    curr_dict = curr_dict[char]
+                # Add special char at the end to indicate a complete string
+                curr_dict[END_NAME_STR] = {}
+
                 # Next, use talking pokemon data to determine speech attribute
                 # Due to how this data is currently parsed, oddly-specific conditions are needed to ensure proper labeling
                 pokemon_speech = "noise"
-                pokemon_name_lowercase = pokemon_name.lower()
 
                 # Specifically skip Mew since it otherwise gets mislabeled with Mewtwo's speech value
                 if pokemon_name_lowercase != "mew":
@@ -260,6 +285,7 @@ class PokemonData():
                 pokemon_data.append(dict_data)
 
         self.csv_data = pokemon_data
+        self.names_trie = trie
         self.max_pokemon = id
         self.version = CURRENT_VERSION
 

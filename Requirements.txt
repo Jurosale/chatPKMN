@@ -25,6 +25,7 @@ filelock==3.13.4
 flatbuffers==24.3.25
 frozenlist==1.4.1
 fsspec==2024.3.1
+getkey==0.6.5
 google-auth==2.29.0
 googleapis-common-protos==1.63.0
 grpcio==1.62.2

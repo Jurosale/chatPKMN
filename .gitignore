@@ -4,6 +4,7 @@
 # Ignore generated files
 Version.txt
 Pokemon.csv
+Names_Trie.json
 
 # Ignore generated folders
 Extra_Files/
