@@ -136,7 +136,8 @@ if __name__ == "__main__":
                     print(f"  -> {user_input} ", end='\r') # Put this here to fix lingering UI issue
                 elif key == keys.TAB:
                     print(f"     {len(user_input)*" "}", end='\r') # Put this here to fix lingering UI issue
-                    suggestions = get_suggestions(user_input, pkmn_obj.names_trie)
+                    formatted_user_input = user_input.lower()
+                    suggestions = get_suggestions(formatted_user_input, pkmn_obj.names_trie)
                     if suggestions:
                         print(f"Suggestion(s): {", ".join(suggestions)}")
                     else:
