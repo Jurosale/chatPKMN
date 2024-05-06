@@ -242,16 +242,30 @@ if __name__ == "__main__":
         # Insert prompt, input and formmatting into chat model and print the response
         response_count += 1
         chain = chat_prompt | chat_model | CustomParser()
-        result = chain.invoke(
-            {"pokemon_name":user_pokemon_data[PKMN_CSV.CSV_NAME_KEY],
-            "type":pkmn_typing,
-            "gen":user_pokemon_data[PKMN_CSV.CSV_GEN_KEY],
-            "text":user_input,
-            "end_phrase":ENDING_PHRASE,
-            "count":response_count,
-            "context":relevant_context,
-            "chat_history":"\n".join(chat_history)}
-        )
+        # Be prepared to handle OpenAI not working... for a variety of reasons
+        try:
+            result = chain.invoke(
+                {"pokemon_name":user_pokemon_data[PKMN_CSV.CSV_NAME_KEY],
+                "type":pkmn_typing,
+                "gen":user_pokemon_data[PKMN_CSV.CSV_GEN_KEY],
+                "text":user_input,
+                "end_phrase":ENDING_PHRASE,
+                "count":response_count,
+                "context":relevant_context,
+                "chat_history":"\n".join(chat_history)}
+            )
+        except Exception as e:
+            error_msg = "I'm not sure what the issue is but maybe wait a bit"
+            if e.status_code == 401:
+                error_msg = "I believe you're using an invalid API Key or not part of the OpenAI organization. Please check your API key"
+            elif e.status_code == 403:
+                error_msg = "I believe you're trying to use OpenAI in an unsupported location. Please change locations"
+            elif e.status_code == 429:
+                error_msg = "I believe you're either sending OpenAI requests to quickly or are out of funds. Please check your API usage"
+            elif e.status_code == 500 or e.status_code == 503:
+                error_msg = "I believe this was a server error. Please wait a bit"
+            print(f"\nPokeDex: Sorry, I lost contact with {user_pokemon_data[PKMN_CSV.CSV_NAME_KEY]}. {error_msg} and then try running me again.")
+            break
         print(result)
 
         # keep track of the 20 most recent inputs & responses
@@ -267,4 +281,4 @@ if __name__ == "__main__":
             pkmn_typing = ""
             response_count = 0
 
-    print("\nPokeDex: Understood, goodbye!")
+    print("\nPokeDex: Goodbye!")
