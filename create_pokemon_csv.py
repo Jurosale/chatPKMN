@@ -8,10 +8,11 @@ import requests
 
 
 DIR = os.path.dirname(__file__)
-EXTRA_FILES_DIR = os.path.join(DIR, "Extra_Files")
-CSV_FILE_PATH = os.path.join(DIR, "Pokemon.csv")
-VERSION_FILE_PATH = os.path.join(DIR, "Version.txt")
-NAMES_TRIE_FILE_PATH = os.path.join(DIR, "Names_Trie.json")
+GENERATED_DIR = os.path.join(DIR, "GENERATED")
+EXTRA_FILES_DIR = os.path.join(GENERATED_DIR, "Extra_Files")
+CSV_FILE_PATH = os.path.join(GENERATED_DIR, "Pokemon.csv")
+VERSION_FILE_PATH = os.path.join(GENERATED_DIR, "Version.txt")
+NAMES_TRIE_FILE_PATH = os.path.join(GENERATED_DIR, "Names_Trie.json")
 
 CSV_ID_KEY = "ID"
 CSV_NAME_KEY = "Name"
@@ -102,6 +103,14 @@ class PokemonData():
         """
         self._get_data()
 
+        # Created GENERATED folder and extra files subdirectory if they don't already exist
+        if not os.path.isdir(GENERATED_DIR):
+            os.mkdir(GENERATED_DIR)
+
+        if not os.path.isdir(EXTRA_FILES_DIR):
+            os.mkdir(EXTRA_FILES_DIR)
+
+        # Remove outdated generated files
         if os.path.exists(CSV_FILE_PATH):
             os.remove(CSV_FILE_PATH)
 
@@ -111,9 +120,7 @@ class PokemonData():
         if os.path.exists(NAMES_TRIE_FILE_PATH):
             os.remove(NAMES_TRIE_FILE_PATH)
 
-        if not os.path.isdir(EXTRA_FILES_DIR):
-            os.mkdir(EXTRA_FILES_DIR)
-
+        # Create new generated files with up-to-date info
         with open(CSV_FILE_PATH, 'w') as f:
             writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
             writer.writeheader()
