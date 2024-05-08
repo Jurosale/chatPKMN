@@ -45,9 +45,9 @@ class PokemonData():
     """
     Object for holding all downloaded Pokemon data
     """
-    csv_data: list[dict]
-    names_trie: dict
-    max_pokemon: int
+    _csv_data: list[dict]
+    _names_trie: dict
+    _max_pokemon: int
     _version: int
 
     def __init__(self):
@@ -56,12 +56,48 @@ class PokemonData():
             self.retrieve_and_write()
 
     @property
+    def csv_data(self) -> list[dict]:
+        return self._csv_data
+
+    @csv_data.setter
+    def csv_data(self, data: list[dict]):
+        if isinstance(data, list):
+            self._csv_data = data
+        else:
+            print("data is not a list. Not setting as csv data.")
+
+    @property
+    def names_trie(self) -> dict:
+        return self._names_trie
+
+    @names_trie.setter
+    def names_trie(self, trie: dict):
+        if isinstance(trie, dict):
+            self._names_trie = trie
+        else:
+            print("data is not a dict. Not setting as names trie.")
+
+    @property
+    def max_pokemon(self) -> int:
+        return self._max_pokemon
+
+    @max_pokemon.setter
+    def max_pokemon(self, value: int):
+        if isinstance(value, int) and value >= 0:
+            self._max_pokemon = value
+        else:
+            print("value is not a non-negative integer. Not setting as max pokemon.")
+
+    @property
     def version(self) -> int:
         return self._version
-    
+
     @version.setter
     def version(self, value: int):
-        self._version = value
+        if isinstance(value, int):
+            self._version = value
+        else:
+            print("value is not an integer. Not setting as version.")
 
     def load(self):
         """
@@ -74,10 +110,10 @@ class PokemonData():
                 self.csv_data = []
                 for data in csv.DictReader(f):
                     # Unfortunately csv.writer converted all values into strings, fixing that here
-                    data[CSV_ID_KEY] = int(data[CSV_ID_KEY])
-                    data[CSV_GEN_KEY] = int(data[CSV_GEN_KEY])
-                    data[CSV_LINKS_KEY] = data[CSV_LINKS_KEY][1:-1].replace("'","").split(", ")
-                    data[CSV_OTHER_LINKS_KEY] = data[CSV_OTHER_LINKS_KEY][1:-1].replace("'","").split(", ")
+                    data[CSV_ID_KEY] = int(data[CSV_ID_KEY]) # int
+                    data[CSV_GEN_KEY] = int(data[CSV_GEN_KEY]) # int
+                    data[CSV_LINKS_KEY] = data[CSV_LINKS_KEY][1:-1].replace("'","").split(", ") # list
+                    data[CSV_OTHER_LINKS_KEY] = data[CSV_OTHER_LINKS_KEY][1:-1].replace("'","").split(", ") # list
 
                     self.csv_data.append(data)
                     pokemon_count += 1
@@ -89,10 +125,6 @@ class PokemonData():
             with open(NAMES_TRIE_FILE_PATH, mode ='r') as f:
                 self.names_trie = json.loads(f.read())
         except:
-            if os.path.exists(CSV_FILE_PATH):
-                os.remove(CSV_FILE_PATH)
-            if os.path.exists(VERSION_FILE_PATH):
-                os.remove(VERSION_FILE_PATH)
             self.version = -1
             return
 
@@ -127,7 +159,7 @@ class PokemonData():
             writer.writerows(self.csv_data)
 
         with open(VERSION_FILE_PATH, 'w') as f:
-            f.write(str(CURRENT_VERSION))
+            f.write(str(self.version))
 
         with open(NAMES_TRIE_FILE_PATH, 'w') as f:
             json_str = json.dumps(self.names_trie)
@@ -203,6 +235,7 @@ class PokemonData():
         id = 0
         gen = 0
         trie = {}
+
         # Due to how this website is specifically parsed, the pokemon content is
         # grouped by generation and thus each section also needs to be iterated through
         for data in pkmndb_web_data.contents:
@@ -215,8 +248,8 @@ class PokemonData():
                 # Added "[0]" at the end so it returns a string instead of a list with a single, string entry
                 parsed_data = curr_pokemon_data.split(SPLIT_PKMN_DATA_STR)[-1:][0]
             
-                # All parsed data here has the exact same format:
-                # [child_url]">'[pokemon_name]...<a class="itype [pokemon_type1]"...
+                # All parsed data here have the exact same format:
+                # [child_url]">[pokemon_name]...<a class="itype [pokemon_type1]"...
                 # (optional): <a class="itype [pokemon_type2]"
                 
                 # Start by extracting child_url
@@ -276,12 +309,12 @@ class PokemonData():
                             else:
                                 pokemon_speech = "talk"
 
-                # Lastly, grab the current pokemon's other link. Since the other link list is already
-                # in pokedex order, just pop the current top link from the list
-                pokemon_other_link = []
-                pokemon_other_link.append(other_links.pop(0))
+                # Lastly, grab the current pokemon's other link (i.e. Bulbapedia entry). Since the other links
+                # list is already in pokedex order, just pop the current top link from the list
+                pokemon_other_links = []
+                pokemon_other_links.append(other_links.pop(0))
 
-                # Now package it into a nice dict and append to pokemon list
+                # Now package it into an organized dict and append to pokemon list
                 dict_data = {
                     CSV_ID_KEY:id,
                     CSV_NAME_KEY:pokemon_name,
@@ -289,10 +322,11 @@ class PokemonData():
                     CSV_SPEECH_KEY:pokemon_speech,
                     CSV_GEN_KEY:gen,
                     CSV_LINKS_KEY:pokemon_name_entry(pokemon_url,id),
-                    CSV_OTHER_LINKS_KEY:pokemon_other_link
+                    CSV_OTHER_LINKS_KEY:pokemon_other_links
                 }
                 pokemon_data.append(dict_data)
 
+        # Assign important class values
         self.csv_data = pokemon_data
         self.names_trie = trie
         self.max_pokemon = id
