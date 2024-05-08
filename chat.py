@@ -12,7 +12,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import requests
 
-import create_pokemon_csv as PKMN_CSV
+import create_pokemon_data as PKMN_DATA
 
 
 SPECIAL_CHARS_IN_NAMES = [".", " ", "-"]
@@ -31,15 +31,15 @@ class CustomParser(BaseOutputParser):
         formatted_text = text
         
         # If pokemon speaks telepathically, showcase it
-        if user_pokemon_data[PKMN_CSV.CSV_SPEECH_KEY] == "telepathy":
+        if user_pokemon_data[PKMN_DATA.CSV_SPEECH_KEY] == "telepathy":
             formatted_text = "*Speaking telepathically* " + formatted_text
 
         # Else if pokemon speaks through pokemon noises, showcase it
-        elif user_pokemon_data[PKMN_CSV.CSV_SPEECH_KEY] == "noise":
-            formatted_text = "*" + user_pokemon_data[PKMN_CSV.CSV_NAME_KEY] + " noises* (" + formatted_text + ")"
+        elif user_pokemon_data[PKMN_DATA.CSV_SPEECH_KEY] == "noise":
+            formatted_text = "*" + user_pokemon_data[PKMN_DATA.CSV_NAME_KEY] + " noises* (" + formatted_text + ")"
 
         # Format should always be: [pokemon_name]([pokedex_id]): speech
-        return "\n" + user_pokemon_data[PKMN_CSV.CSV_NAME_KEY] + " (#" + str(user_pokemon_data[PKMN_CSV.CSV_ID_KEY]) + "): " + formatted_text
+        return "\n" + user_pokemon_data[PKMN_DATA.CSV_NAME_KEY] + " (#" + str(user_pokemon_data[PKMN_DATA.CSV_ID_KEY]) + "): " + formatted_text
 
 
 # Perfroms a DFS of the trie to retrieve every full string name
@@ -47,7 +47,7 @@ class CustomParser(BaseOutputParser):
 def get_suggestions(input: str, trie_dict: dict) -> list[str]:
     def _recursive_search(curr_str: str, curr_trie_dict: dict, suggest: list[str]):
         for next_char in curr_trie_dict.keys():
-            if next_char == PKMN_CSV.END_NAME_STR:
+            if next_char == PKMN_DATA.END_NAME_STR:
                 suggest.append(curr_str)
             _recursive_search(curr_str+next_char, curr_trie_dict[next_char], suggest)
 
@@ -75,7 +75,7 @@ if __name__ == "__main__":
     chat_model = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0, openai_api_key=api_key)
     
     # Retrieve pokemon data from websites
-    pkmn_obj = PKMN_CSV.PokemonData()
+    pkmn_obj = PKMN_DATA.PokemonData()
 
     # Assign prompt & input
     template = """
@@ -119,7 +119,7 @@ if __name__ == "__main__":
     while True:
         # Ensure a pokemon is selected to converse with
         while not user_pokemon_data:
-            web_paths = [PKMN_CSV.PKMN_DB_WEB_PATH]
+            web_paths = [PKMN_DATA.PKMN_DB_WEB_PATH]
             print("\nPokeDex: Please type in the pokemon's name or pokedex number to get started, press the tab key for a "
                 + "suggestion based on current input or press the escape key to exit.")
             user_input = ""
@@ -161,7 +161,7 @@ if __name__ == "__main__":
             else:
                 formatted_input = user_input.lower()
                 for line in pkmn_obj.csv_data:
-                    if formatted_input == line[PKMN_CSV.CSV_NAME_KEY].lower():
+                    if formatted_input == line[PKMN_DATA.CSV_NAME_KEY].lower():
                         user_pokemon_data = line
                         break
                 if not user_pokemon_data:
@@ -171,9 +171,9 @@ if __name__ == "__main__":
             # and start up conversation with the chosen pokemon
             if user_pokemon_data:
                 # Print this statement to buy some time while loading the chosen pokemon's web data
-                print(f"\nContacting {user_pokemon_data[PKMN_CSV.CSV_NAME_KEY]}...")
+                print(f"\nContacting {user_pokemon_data[PKMN_DATA.CSV_NAME_KEY]}...")
 
-                web_paths.extend(user_pokemon_data[PKMN_CSV.CSV_LINKS_KEY])
+                web_paths.extend(user_pokemon_data[PKMN_DATA.CSV_LINKS_KEY])
                 loader = WebBaseLoader(
                     web_paths=(web_paths),
                     requests_per_second=2
@@ -181,19 +181,19 @@ if __name__ == "__main__":
                 all_data = loader.load()
 
                 # Remove files in extra files folder before continuing
-                for file in os.listdir(PKMN_CSV.EXTRA_FILES_DIR):
-                    file_path = os.path.join(PKMN_CSV.EXTRA_FILES_DIR, file)
+                for file in os.listdir(PKMN_DATA.EXTRA_FILES_DIR):
+                    file_path = os.path.join(PKMN_DATA.EXTRA_FILES_DIR, file)
                     os.remove(file_path)
 
                 # Since these links have access restrictions, grab content via HTTP requests instead of WebBaseLoader
-                for other_link in user_pokemon_data[PKMN_CSV.CSV_OTHER_LINKS_KEY]:
+                for other_link in user_pokemon_data[PKMN_DATA.CSV_OTHER_LINKS_KEY]:
                     # Get content from link and remove HTML characters
                     response = requests.get(other_link)
                     soup = BeautifulSoup(response.text, "html.parser")
                     text_data = soup.get_text()
 
                     # Write data as a text file and append its content into the document object
-                    other_file_path = os.path.join(PKMN_CSV.EXTRA_FILES_DIR, user_pokemon_data[PKMN_CSV.CSV_NAME_KEY] + '.txt')
+                    other_file_path = os.path.join(PKMN_DATA.EXTRA_FILES_DIR, user_pokemon_data[PKMN_DATA.CSV_NAME_KEY] + '.txt')
                     with open(other_file_path, "w") as f:
                         f.write(text_data)
                     curr_loader = TextLoader(other_file_path)
@@ -213,16 +213,16 @@ if __name__ == "__main__":
 
                 # TODO: Figure how out how to get OpenAI to consistently start with this intro so I don't need to hardcode it here!
                 # Always start with this Intro:
-                intro_text = f"Hello, my name is {user_pokemon_data[PKMN_CSV.CSV_NAME_KEY]}. I am a {user_pokemon_data[PKMN_CSV.CSV_TYPE_KEY]} type pokemon from gen {str(user_pokemon_data[PKMN_CSV.CSV_GEN_KEY])}. What would you like to ask me?"
+                intro_text = f"Hello, my name is {user_pokemon_data[PKMN_DATA.CSV_NAME_KEY]}. I am a {user_pokemon_data[PKMN_DATA.CSV_TYPE_KEY]} type pokemon from gen {str(user_pokemon_data[PKMN_DATA.CSV_GEN_KEY])}. What would you like to ask me?"
                 
                 # If pokemon speaks telepathically, showcase it
-                if user_pokemon_data[PKMN_CSV.CSV_SPEECH_KEY] == "telepathy":
+                if user_pokemon_data[PKMN_DATA.CSV_SPEECH_KEY] == "telepathy":
                     intro_text = "*Speaking telepathically* " + intro_text
                 # Else if pokemon speaks through pokemon noises, showcase it
-                elif user_pokemon_data[PKMN_CSV.CSV_SPEECH_KEY] == "noise":
-                    intro_text = "*" + user_pokemon_data[PKMN_CSV.CSV_NAME_KEY] + " noises* (" + intro_text + ")"
+                elif user_pokemon_data[PKMN_DATA.CSV_SPEECH_KEY] == "noise":
+                    intro_text = "*" + user_pokemon_data[PKMN_DATA.CSV_NAME_KEY] + " noises* (" + intro_text + ")"
 
-                print(f"\n{user_pokemon_data[PKMN_CSV.CSV_NAME_KEY]} (#{str(user_pokemon_data[PKMN_CSV.CSV_ID_KEY])}): {intro_text}")
+                print(f"\n{user_pokemon_data[PKMN_DATA.CSV_NAME_KEY]} (#{str(user_pokemon_data[PKMN_DATA.CSV_ID_KEY])}): {intro_text}")
 
         if not is_running:
             break
@@ -245,9 +245,9 @@ if __name__ == "__main__":
         # Be prepared to handle OpenAI not working... for a variety of reasons
         try:
             result = chain.invoke(
-                {"pokemon_name":user_pokemon_data[PKMN_CSV.CSV_NAME_KEY],
+                {"pokemon_name":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
                 "type":pkmn_typing,
-                "gen":user_pokemon_data[PKMN_CSV.CSV_GEN_KEY],
+                "gen":user_pokemon_data[PKMN_DATA.CSV_GEN_KEY],
                 "text":user_input,
                 "end_phrase":ENDING_PHRASE,
                 "count":response_count,
@@ -264,7 +264,7 @@ if __name__ == "__main__":
                 error_msg = "I believe you're either sending OpenAI requests to quickly or are out of funds. Please check your API usage"
             elif e.status_code == 500 or e.status_code == 503:
                 error_msg = "I believe this was a server error. Please wait a bit"
-            print(f"\nPokeDex: Sorry, I lost contact with {user_pokemon_data[PKMN_CSV.CSV_NAME_KEY]}. {error_msg} and then try running me again.")
+            print(f"\nPokeDex: Sorry, I lost contact with {user_pokemon_data[PKMN_DATA.CSV_NAME_KEY]}. {error_msg} and then try running me again.")
             break
         print(result)
 
