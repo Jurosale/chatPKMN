@@ -45,6 +45,7 @@ class CustomParser(BaseOutputParser):
 # Perfroms a DFS of the trie to retrieve every full string name
 # it can find based on the provided prefix string
 def get_suggestions(input: str, trie_dict: dict) -> list[str]:
+    # Use a recrusive search for DFS
     def _recursive_search(curr_str: str, curr_trie_dict: dict, suggest: list[str]):
         for next_char in curr_trie_dict.keys():
             if next_char == PKMN_DATA.END_NAME_STR:
@@ -54,11 +55,15 @@ def get_suggestions(input: str, trie_dict: dict) -> list[str]:
     suggestions = []
     curr_dict = trie_dict
     for char in input:
+        # If current prefix does not exist in trie,
+        # then there aren't any names to suggest
         if char not in curr_dict:
             return suggestions
         curr_dict = curr_dict[char]
     _recursive_search(input, curr_dict, suggestions)
 
+    # If there are more available suggestions than the max allowed,
+    # randomly pick suggestions until the max amount is reached
     if len(suggestions) > MAX_SUGGESTIONS:
         suggestions = sample(suggestions, MAX_SUGGESTIONS)
     return suggestions
@@ -68,8 +73,7 @@ if __name__ == "__main__":
     # Print this statement to buy some time while setting up data & model
     print("Contacting PokeDex...")
 
-    # Load up hidden API key located in a different
-    # file and set up chatbot model
+    # Load up hidden API key located in a different file and set up chatbot model
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
     chat_model = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0, openai_api_key=api_key)
@@ -113,7 +117,6 @@ if __name__ == "__main__":
 
     chat_history = []
     retriever = ""
-    pkmn_typing = ""
     response_count = 0
     is_running = True
     while True:
@@ -126,14 +129,17 @@ if __name__ == "__main__":
             key = ""
             # Use getKey() instead of input() to offer suggestions as the user types a name
             while key != keys.ENTER:
-                print(f"  -> {user_input}", end='\r')
+                print(f"  -> {user_input}", end='\r') # This will give the impression of typing input in one line
                 key = getkey()
+                # Exit if user presses ESC key
                 if key == keys.ESC:
                     is_running = False
                     break
+                # Delete newest char if user presses BACKSPACE key
                 if key == keys.BACKSPACE:
                     user_input = user_input[:-1]
                     print(f"  -> {user_input} ", end='\r') # Put this here to fix lingering UI issue
+                # Gives suggestion(s), if any exist, if user presses TAB key
                 elif key == keys.TAB:
                     print(f"     {len(user_input)*" "}", end='\r') # Put this here to fix lingering UI issue
                     formatted_user_input = user_input.lower()
@@ -142,6 +148,7 @@ if __name__ == "__main__":
                         print(f"Suggestion(s): {", ".join(suggestions)}")
                     else:
                         print(f"Suggestions: None")
+                # Accept input if it's a letter, number or certain special char
                 elif key.isalnum() or key in SPECIAL_CHARS_IN_NAMES:
                     user_input += key
 
@@ -242,11 +249,12 @@ if __name__ == "__main__":
         # Insert prompt, input and formmatting into chat model and print the response
         response_count += 1
         chain = chat_prompt | chat_model | CustomParser()
+
         # Be prepared to handle OpenAI not working... for a variety of reasons
         try:
             result = chain.invoke(
                 {"pokemon_name":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
-                "type":pkmn_typing,
+                "type":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
                 "gen":user_pokemon_data[PKMN_DATA.CSV_GEN_KEY],
                 "text":user_input,
                 "end_phrase":ENDING_PHRASE,
@@ -278,7 +286,6 @@ if __name__ == "__main__":
             user_pokemon_data = {}
             chat_history = []
             retriever = ""
-            pkmn_typing = ""
             response_count = 0
 
     print("\nPokeDex: Goodbye!")
