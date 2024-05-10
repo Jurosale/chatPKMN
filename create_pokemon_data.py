@@ -231,7 +231,7 @@ class PokemonData():
         pkmndb_web_data = loader.scrape()
     
         # Now sort through data and store pokemon ids, names, types, speech patterns,
-        # generations & urls from retrieving additional information
+        # generations & webpage urls for retrieving additional information
         id = 0
         gen = 0
         trie = {}
@@ -277,14 +277,14 @@ class PokemonData():
                     if type.lower() not in POKEMON_TYPES:
                         raise Exception(f"{type} is not a valid type.")
                 
-                # Add name to trie data structure for suggestion purposes
+                # Add name to trie data structure for suggestion purposes during runtime
                 pokemon_name_lowercase = pokemon_name.lower()
                 curr_dict = trie
                 for char in pokemon_name_lowercase:
                     if char not in curr_dict:
                         curr_dict[char] = {}
                     curr_dict = curr_dict[char]
-                # Add special char at the end to indicate a complete string
+                # Add special char at the end to indicate a complete name
                 curr_dict[END_NAME_STR] = {}
 
                 # Next, use talking pokemon data to determine speech attribute
@@ -337,7 +337,7 @@ def pokemon_name_entry(name: str, id: int) -> list:
     websites = []
     str_num = str(id)
     
-    # A formatted string should be 4 digits
+    # A formatted string should be 4 digits with leading zeros if necessary
     str_num_formmatted = str_num
     for i in range(4 - len(str_num)):
         str_num_formmatted = "0" + str_num_formmatted
