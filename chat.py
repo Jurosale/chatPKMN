@@ -83,7 +83,9 @@ if __name__ == "__main__":
 
     # Assign prompt & input
     template = """
-        You are {pokemon_name}, a {type} type pokemon from generation {gen}. You are talking to a user who wants to ask you questions about yourself or give you requests. Follow the conversation rules listed below when responding to the user.
+        You are a Pokemon named {pokemon_name}, a {type} type from generation {gen}. You are talking to a user who wants to ask you questions about yourself or give you requests. Utilize the "Current Response Count" and the "Conversation Rules" listed below when responding to the user.
+
+        Current Response Count is {count}.
 
         Conversation Rules:
         1. Keep your responses to 3 sentences max unless the user explicitly gives you a response length to follow.
@@ -93,10 +95,7 @@ if __name__ == "__main__":
         5. If the user asks you something and you don't know the answer, reply with "I don't know. Would you like to ask me something else?".
         6. Do not lie or make up answers. Use the information found in "Important Information" as additional context (if possible) when deciding on a response.
         7. Use the conversation history in "Chat History" as additional context when evaluating the user's input.
-        8. If the conversation ends, the user declines to ask you more questions or "Current Response Count" is greater than 10, do not ask a question and append "{end_phrase}" to the end of your response.
-        
-        Current Response Count:
-        {count}
+        8. If the conversation ends, the user declines to ask you more questions or "Current Response Count" is 10 or greater, do not ask a question and append "{end_phrase}" to the end of your response.
         
         Important Information:
         {context}
@@ -217,22 +216,15 @@ if __name__ == "__main__":
             # Set the retriever and filtering parameters
             retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 20})
 
-            # TODO: Figure how out how to get OpenAI to consistently start with this intro so I don't need to hardcode the rest of this section below!
-            # Always start with this Intro:
-            intro_text = f"Hello, my name is {user_pokemon_data[PKMN_DATA.CSV_NAME_KEY]}. I am a {user_pokemon_data[PKMN_DATA.CSV_TYPE_KEY]} type pokemon from gen {str(user_pokemon_data[PKMN_DATA.CSV_GEN_KEY])}. What would you like to ask me?"
-            
-            # If pokemon speaks telepathically, showcase it
-            if user_pokemon_data[PKMN_DATA.CSV_SPEECH_KEY] == "telepathy":
-                intro_text = "*Speaking telepathically* " + intro_text
-            # Else if pokemon speaks through pokemon noises, showcase it
-            elif user_pokemon_data[PKMN_DATA.CSV_SPEECH_KEY] == "noise":
-                intro_text = "*" + user_pokemon_data[PKMN_DATA.CSV_NAME_KEY] + " noises* (" + intro_text + ")"
-
-            print(f"\n{user_pokemon_data[PKMN_DATA.CSV_NAME_KEY]} (#{str(user_pokemon_data[PKMN_DATA.CSV_ID_KEY])}): {intro_text}")
-
         # 5th part of loop: Converse with user until current conversation ends
         while retriever and ENDING_PHRASE not in result:
-            user_input = input("  -> ")
+            response_count += 1
+            
+            # Skip user input on the very first response since we need to produce a prompt first
+            if response_count != 1:
+                user_input = input("  -> ")
+            else:
+                user_input = "tell me about yourself."
 
             # Convert retriever obj's content into a list of strings to better
             # append to prompt as additional context when generating a response
@@ -242,14 +234,13 @@ if __name__ == "__main__":
                 relevant_context += f"{idx+1}. {doc.page_content}\n"
 
             # Insert prompt, input and formmatting into chat model and print the response
-            response_count += 1
             chain = chat_prompt | chat_model | CustomParser()
 
             # Be prepared to handle OpenAI not working... for a variety of reasons
             try:
                 result = chain.invoke(
                     {"pokemon_name":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
-                    "type":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
+                    "type":user_pokemon_data[PKMN_DATA.CSV_TYPE_KEY],
                     "gen":user_pokemon_data[PKMN_DATA.CSV_GEN_KEY],
                     "text":user_input,
                     "end_phrase":ENDING_PHRASE,
@@ -258,6 +249,12 @@ if __name__ == "__main__":
                     "chat_history":"\n".join(chat_history)}
                 )
             except Exception as e:
+                # Establish "technical issue" with the PokeDex
+                context_msg = "Sorry, I lost contact with"
+                if response_count == 1:
+                    context_msg = "Sorry, I was unable to contact"
+                
+                # Determine cause of OpenAI issue
                 error_msg = "I'm not sure what the issue is but maybe wait a bit"
                 if e.status_code == 401:
                     error_msg = "I believe you're using an invalid API Key or not part of the OpenAI organization. Please check your API key"
@@ -267,8 +264,12 @@ if __name__ == "__main__":
                     error_msg = "I believe you're either sending OpenAI requests to quickly or are out of funds. Please check your API usage"
                 elif e.status_code == 500 or e.status_code == 503:
                     error_msg = "I believe this was a server error. Please wait a bit"
-                print(f"\nPokeDex: Sorry, I lost contact with {user_pokemon_data[PKMN_DATA.CSV_NAME_KEY]}. {error_msg} and then try running me again.")
+
+                # Provide an explanation to hint the user on how to resolve the issue and exit
+                print(f"\nPokeDex: {context_msg} {user_pokemon_data[PKMN_DATA.CSV_NAME_KEY]}. {error_msg} and then try running me again.")
                 break
+
+            # Print successfully generated response
             print(result)
 
             # keep track of the 20 most recent inputs & responses
