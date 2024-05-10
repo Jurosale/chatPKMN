@@ -177,7 +177,8 @@ class PokemonData():
             web_path=(PKMN_TALK_WEB_PATH),
             bs_kwargs={"parse_only": bs4_filter}
         )
-        # Due to how this data is currently retrieved, oddly-specific storing and spliting are needed to ensure proper labeling
+        # Due to how this data is currently retrieved, oddly-specific storing and spliting techniques are
+        # needed to ensure proper labeling of speech attributes
         pkmn_talk_web_data = str(loader.scrape().contents[4])
         talk_data_list = []
         # Need to retrieve only actual text from site
@@ -287,27 +288,22 @@ class PokemonData():
                 # Add special char at the end to indicate a complete name
                 curr_dict[END_NAME_STR] = {}
 
-                # Next, use talking pokemon data to determine speech attribute
-                # Due to how this data is currently parsed, oddly-specific conditions are needed to ensure proper labeling
+                # Next, use talking pokemon data and address the following edge cases to determine speech attribute:
+                # Edge Case 1: any mentioned pokemon is considered a "talking" pokemon unless stated otherwise
+                # Edge Case 2: skip Mew since it otherwise gets mislabeled with Mewtwo's speech value
+                # Edge Case 3: some talking pokemon have "without telepathy" in their description
+                # Edge Case 4: telepathy is stated or implied with "talk through meowth" in their description
+                # Edge Case 5: some pokemon have multiple entries and "talking" has more priority than "telepathy"
                 pokemon_speech = "noise"
-
-                # Specifically skip Mew since it otherwise gets mislabeled with Mewtwo's speech value
                 if pokemon_name_lowercase != "mew":
-                    # If current pokemon is mentioned in talk data, find it's correct speech value
                     for talk_data in talk_data_list:
                         if pokemon_name_lowercase in talk_data:
-                            # Edge Case: some talking pokemon have "without telepathy" in their description
-                            if "without telepathy" in talk_data:
-                                pokemon_speech = "talk"
-
-                            # Any mentions of "telepath" means the pokemon speaks through telepathy
-                            # Edge Case: Sometimes telepathy is implied with "talk through meowth"
-                            elif ("telepath" in talk_data or "talk through meowth" in talk_data) and pokemon_speech != "talk":
+                            if pokemon_speech != "talk" and "without telepathy" not in talk_data and \
+                                ("telepath" in talk_data or "talk through meowth" in talk_data):
                                 pokemon_speech = "telepathy"
-
-                            # If there's no mention of "telepathy", then the pokemon can actually speak
                             else:
                                 pokemon_speech = "talk"
+                                break
 
                 # Lastly, grab the current pokemon's other link (i.e. Bulbapedia entry). Since the other links
                 # list is already in pokedex order, just pop the current top link from the list
