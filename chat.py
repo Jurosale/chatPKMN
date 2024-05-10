@@ -236,7 +236,10 @@ if __name__ == "__main__":
             if response_count != 1:
                 user_input = input("  -> ")
             else:
-                user_input = "tell me about yourself and include a prompt about yourself."
+                user_input = """
+                    Tell me about yourself (in the first person point of view) and
+                    include a question about yourself for me to answer.
+                    """
 
             # Convert retriever obj's content into a list of strings to better
             # append to prompt as additional context when generating a response
