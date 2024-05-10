@@ -39,7 +39,8 @@ class CustomParser(BaseOutputParser):
             formatted_text = "*" + user_pokemon_data[PKMN_DATA.CSV_NAME_KEY] + " noises* (" + formatted_text + ")"
 
         # Format should always be: [pokemon_name]([pokedex_id]): speech
-        return "\n" + user_pokemon_data[PKMN_DATA.CSV_NAME_KEY] + " (#" + str(user_pokemon_data[PKMN_DATA.CSV_ID_KEY]) + "): " + formatted_text
+        return "\n" + user_pokemon_data[PKMN_DATA.CSV_NAME_KEY] + " (#" + \
+            str(user_pokemon_data[PKMN_DATA.CSV_ID_KEY]) + "): " + formatted_text
 
 
 # Perfroms a DFS of the trie to retrieve every full string name
@@ -83,19 +84,27 @@ if __name__ == "__main__":
 
     # Assign prompt & input
     template = """
-        You are a Pokemon named {pokemon_name}, a {type} type from generation {gen}. You are talking to a user who wants to ask you questions about yourself or give you requests. Utilize the "Current Response Count" and the "Conversation Rules" listed below when responding to the user.
+        You are a Pokemon named {pokemon_name}, a {type} type from generation {gen}. You are talking to a user who
+        wants to ask you questions about yourself or give you requests. Utilize the "Current Response Count" and
+        the "Conversation Rules" listed below when responding to the user.
 
         Current Response Count is {count}.
 
         Conversation Rules:
-        1. Keep your responses to 3 sentences max unless the user explicitly gives you a response length to follow.
-        2. If the user's input is inappropriate, reply with "I don't feel comfortable with this conversation. Would you like to talk about something else instead?".
-        3. If the user's input is incomprehensible or empty, reply with "I don't understand. Would you like to ask me something else?".
-        4. If the user asks something that is not related to the pokemon world or you in any way, reply with "I don't know anything outside of the pokemon world. Would you like to ask me something else?".
-        5. If the user asks you something and you don't know the answer, reply with "I don't know. Would you like to ask me something else?".
-        6. Do not lie or make up answers. Use the information found in "Important Information" as additional context (if possible) when deciding on a response.
-        7. Use the conversation history in "Chat History" as additional context when evaluating the user's input.
-        8. If the conversation ends, the user declines to ask you more questions or "Current Response Count" is 10 or greater, do not ask a question and append "{end_phrase}" to the end of your response.
+        1.  Keep your responses to 3 sentences max unless the user explicitly gives you a response length to follow.
+        2.  If the user's input is inappropriate, reply with "I don't feel comfortable with this conversation.
+            Would you like to talk about something else instead?".
+        3.  If the user's input is incomprehensible or empty, reply with "I don't understand. Would you like to ask
+            me something else?".
+        4.  If the user asks something that is not related to the pokemon world or you in any way, reply with "I
+            don't know anything outside of the pokemon world. Would you like to ask me something else?".
+        5.  If the user asks you something and you don't know the answer, reply with "I don't know. Would you like
+            to ask me something else?".
+        6.  Do not lie or make up answers. Use the information found in "Important Information" as additional context
+            (if possible) when deciding on a response.
+        7.  Use the conversation history in "Chat History" as additional context when evaluating the user's input.
+        8.  If the conversation ends, the user declines to ask you more questions or "Current Response Count" is 10
+            or greater, do not ask a question and append "{end_phrase}" to the end of your response.
         
         Important Information:
         {context}
@@ -128,10 +137,10 @@ if __name__ == "__main__":
         response_count = 0
 
         # 2nd part of loop: Ensure either a pokemon is selected to converse with or user is done
-        print("\nPokeDex: Please type in the pokemon's name or pokedex number to get started, press the tab key for a "
-            + "suggestion based on current input or press the escape key to exit.")
-        # Use getKey() instead of input() to both offer suggestions as the user types a name and filter out invalid chars
-        # ESC key = exit program, BACKSPACE key = delete newest char, TAB key = give suggestion(s), ENTER key = accept user input
+        print("\nPokeDex: Please type in the pokemon's name or pokedex number to get started, press the TAB key "
+              "for a suggestion based on current input or press the ESCAPE key to exit.")
+        # Use getKey() instead of input() to offer suggestions as the user types a name and filter out invalid chars
+        # ESC -> exit program, BACKSPACE -> delete newest char, TAB -> give suggestion(s), ENTER -> accept user input
         while key != keys.ENTER:
             print(f"  -> {user_input}", end='\r') # This will give the impression of typing input in one line
             key = getkey()
@@ -161,7 +170,8 @@ if __name__ == "__main__":
             if user_input.isdigit():
                 int_val = int(user_input)
                 if int_val < 1 or int_val > pkmn_obj.max_pokemon:
-                    print(f"\nPokeDex: There is no such pokemon with pokedex number '{user_input}'. Try a number between 1 and {pkmn_obj.max_pokemon}.")
+                    print(f"\nPokeDex: There is no such pokemon with pokedex number '{user_input}'."
+                          f" Try a number between 1 and {pkmn_obj.max_pokemon}.")
                 else:
                     user_pokemon_data = pkmn_obj.csv_data[int_val-1]
             # Else, check for pokemon by name
@@ -191,14 +201,16 @@ if __name__ == "__main__":
                 file_path = os.path.join(PKMN_DATA.EXTRA_FILES_DIR, file)
                 os.remove(file_path)
 
-            # Since these links have access restrictions, grab content via HTTP requests instead of WebBaseLoader and remove HTML chars
+            # Since these links have access restrictions, grab content via HTTP requests instead of WebBaseLoader
+            # Also remove all HTML characters after a successful retrieval
             for other_link in user_pokemon_data[PKMN_DATA.CSV_OTHER_LINKS_KEY]:
                 response = requests.get(other_link)
                 soup = BeautifulSoup(response.text, "html.parser")
                 text_data = soup.get_text()
 
                 # Write data as a text file and append its content into the document object
-                other_file_path = os.path.join(PKMN_DATA.EXTRA_FILES_DIR, user_pokemon_data[PKMN_DATA.CSV_NAME_KEY] + '.txt')
+                other_file_path = os.path.join(PKMN_DATA.EXTRA_FILES_DIR,
+                    user_pokemon_data[PKMN_DATA.CSV_NAME_KEY] + '.txt')
                 with open(other_file_path, "w") as f:
                     f.write(text_data)
                 curr_loader = TextLoader(other_file_path)
@@ -257,20 +269,23 @@ if __name__ == "__main__":
                 # Determine cause of OpenAI issue
                 error_msg = "I'm not sure what the issue is but maybe wait a bit"
                 if e.status_code == 401:
-                    error_msg = "I believe you're using an invalid API Key or not part of the OpenAI organization. Please check your API key"
+                    error_msg = "You're using an invalid or non-OpenAI affiliated API Key. Please check your API key"
                 elif e.status_code == 403:
-                    error_msg = "I believe you're trying to use OpenAI in an unsupported location. Please change locations"
+                    error_msg = "You're trying to use OpenAI in an unsupported location. Please change locations"
                 elif e.status_code == 429:
-                    error_msg = "I believe you're either sending OpenAI requests to quickly or are out of funds. Please check your API usage"
+                    error_msg = "You're either sending OpenAI requests to quickly or are out of funds. Please fix this"
                 elif e.status_code == 500 or e.status_code == 503:
                     error_msg = "I believe this was a server error. Please wait a bit"
 
                 # Provide an explanation to hint the user on how to resolve the issue and exit
-                print(f"\nPokeDex: {context_msg} {user_pokemon_data[PKMN_DATA.CSV_NAME_KEY]}. {error_msg} and then try running me again.")
+                print(f"\nPokeDex: {context_msg} {user_pokemon_data[PKMN_DATA.CSV_NAME_KEY]}."
+                      f" {error_msg} and then try running me again.")
+                is_running = False
                 break
 
-            # Print successfully generated response
-            print(result)
+            else:
+                # Print successfully generated response
+                print(result)
 
             # keep track of the 20 most recent inputs & responses
             chat_history.append("User: " + user_input)
