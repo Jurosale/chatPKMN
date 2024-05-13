@@ -63,11 +63,9 @@ def get_suggestions(input: str, trie_dict: dict) -> list[str]:
         curr_dict = curr_dict[char]
     _recursive_search(input, curr_dict, suggestions)
 
-    # If there are more available suggestions than the max allowed,
-    # randomly pick suggestions until the max amount is reached
-    if len(suggestions) > MAX_SUGGESTIONS:
-        suggestions = sample(suggestions, MAX_SUGGESTIONS)
-    return suggestions
+    # Randomly sort suggestions and cap amount if necessary
+    num_suggestions = min(len(suggestions), MAX_SUGGESTIONS)
+    return sample(suggestions, num_suggestions)
 
 
 if __name__ == "__main__":
