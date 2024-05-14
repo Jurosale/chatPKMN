@@ -230,7 +230,7 @@ if __name__ == "__main__":
             retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 20})
 
         # 5th part of loop: Converse with user until current conversation ends
-        while retriever and ENDING_PHRASE not in result:
+        while retriever and ENDING_PHRASE.lower() not in result.lower():
             response_count += 1
             
             # Skip user input on the very first response since we need to produce a prompt first
