@@ -28,22 +28,24 @@ class CustomParser(BaseOutputParser):
     """
     def parse(self, text: str) -> str:
         # Filter out newlines and multiple whitespaces for a cleaner text display
-        formatted_text = text
-        formatted_text = formatted_text.replace("\n"," ")
+        formatted_text = text.replace("\n"," ")
         while "  " in formatted_text:
             formatted_text.replace("  ", " ")
+        return formatted_text
 
-        # If pokemon speaks telepathically, showcase it
-        if user_pokemon_data[PKMN_DATA.CSV_SPEECH_KEY] == "telepathy":
-            formatted_text = "*Speaking telepathically* " + formatted_text
 
-        # Else if pokemon speaks through pokemon noises, showcase it
-        elif user_pokemon_data[PKMN_DATA.CSV_SPEECH_KEY] == "noise":
-            formatted_text = "*" + user_pokemon_data[PKMN_DATA.CSV_NAME_KEY] + " noises* (" + formatted_text + ")"
-
-        # Format should always be: [pokemon_name]([pokedex_id]): speech
-        return "\n" + user_pokemon_data[PKMN_DATA.CSV_NAME_KEY] + " (#" + \
-            str(user_pokemon_data[PKMN_DATA.CSV_ID_KEY]) + "): " + formatted_text
+# NOTE: This function was separated from the parser class above to address a formatting bug in the model's responses
+# Print out model response in this format -> [pokemon_name]([pokedex_id]): [speech]
+# Include the pokemon's speech pattern (ex. telepath, nosies, etc.) as well
+def print_response(text: str):
+    response = f"\n{user_pokemon_data[PKMN_DATA.CSV_NAME_KEY]} (#{str(user_pokemon_data[PKMN_DATA.CSV_ID_KEY])}): "
+    if user_pokemon_data[PKMN_DATA.CSV_SPEECH_KEY] == "telepathy":
+        response += ("*Speaking telepathically* " + text)
+    elif user_pokemon_data[PKMN_DATA.CSV_SPEECH_KEY] == "noise":
+        response += ("*" + user_pokemon_data[PKMN_DATA.CSV_NAME_KEY] + " noises* (" + text + ")")
+    else:
+        response += text
+    print(response)
 
 
 # Perfroms a DFS of the trie to retrieve every full string name
@@ -240,11 +242,8 @@ if __name__ == "__main__":
             if response_count != 1:
                 user_input = input("  -> ")
             else:
-                user_input = """
-                    Tell me about yourself (in the first person point of view) and
-                    include a suggestion to ask you a question about yourself or
-                    the Pokemon world you live in.
-                    """
+                user_input = "Tell me about yourself (in the first person point of view) and include " + \
+                    "a suggestion to ask you a question about yourself or the Pokemon world you live in."
 
             # Convert retriever obj's content into a list of strings to better
             # append to prompt as additional context when generating a response
@@ -292,12 +291,12 @@ if __name__ == "__main__":
                 break
 
             else:
-                # Print successfully generated response
-                print(result)
+                # Print successfully generated response in the desired format
+                print_response(result)
 
-            # keep track of the 20 most recent inputs & responses
-            chat_history.append("User: " + user_input)
-            chat_history.append("You: " + result)
-            chat_history = chat_history[-20:]
+                # keep track of the 20 most recent inputs & responses
+                chat_history.append("User: " + user_input)
+                chat_history.append("You: " + result)
+                chat_history = chat_history[-20:]
 
     print("\nPokeDex: Goodbye!")
