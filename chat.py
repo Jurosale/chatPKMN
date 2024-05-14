@@ -27,9 +27,12 @@ class CustomParser(BaseOutputParser):
     This parser object allows users to format a chat model's response.
     """
     def parse(self, text: str) -> str:
-        # Assume pokemon speaks normally unless speech value says otherwise
+        # Filter out newlines and multiple whitespaces for a cleaner text display
         formatted_text = text
-        
+        formatted_text = formatted_text.replace("\n"," ")
+        while "  " in formatted_text:
+            formatted_text.replace("  ", " ")
+
         # If pokemon speaks telepathically, showcase it
         if user_pokemon_data[PKMN_DATA.CSV_SPEECH_KEY] == "telepathy":
             formatted_text = "*Speaking telepathically* " + formatted_text
