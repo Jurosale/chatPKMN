@@ -75,7 +75,7 @@ if __name__ == "__main__":
     # Load up hidden API key located in a different file and set up chatbot model
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
-    chat_model = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0, openai_api_key=api_key)
+    chat_model = ChatOpenAI(model_name="gpt-4o", temperature=0, openai_api_key=api_key)
     
     # Retrieve pokemon data from websites
     pkmn_obj = PKMN_DATA.PokemonData()
