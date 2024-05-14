@@ -138,6 +138,7 @@ if __name__ == "__main__":
         print("\nPokeDex: Please type in the pokemon's name or pokedex number to get started, press the TAB key "
               "for a suggestion based on current input or press the ESCAPE key to exit.")
         # Use getKey() instead of input() to offer suggestions as the user types a name and filter out invalid chars
+        # If there's only one suggestion, autocomplete the user's input with it
         # ESC -> exit program, BACKSPACE -> delete newest char, TAB -> give suggestion(s), ENTER -> accept user input
         while key != keys.ENTER:
             print(f"  -> {user_input}", end='\r') # This will give the impression of typing input in one line
@@ -153,10 +154,12 @@ if __name__ == "__main__":
                 print(f"     {len(user_input)*" "}", end='\r') # Put this here to fix lingering UI issue
                 formatted_user_input = user_input.lower()
                 suggestions = get_suggestions(formatted_user_input, pkmn_obj.names_trie)
-                if suggestions:
-                    print(f"Suggestion(s): {", ".join(suggestions)}")
+                if len(suggestions) == 1:
+                    user_input += suggestions[0][len(user_input):]
+                elif suggestions:
+                    print(f"Suggestions: {", ".join(suggestions)}")
                 else:
-                    print(f"Suggestions: None")
+                    print(f"Suggestions: NONE")
             elif key.isalnum() or key in SPECIAL_CHARS_IN_NAMES:
                 user_input += key
         print("\n") # Put this here to fix missing newline UI issue
