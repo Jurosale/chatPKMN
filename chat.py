@@ -10,7 +10,6 @@ from langchain_core.output_parsers import BaseOutputParser
 from langchain_core.prompts.chat import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-import openai
 import requests
 
 import create_pokemon_data as PKMN_DATA
@@ -19,7 +18,6 @@ import create_pokemon_data as PKMN_DATA
 SPECIAL_CHARS_IN_NAMES = [".", " ", "-"]
 ENDING_PHRASE = "Thank you for talking to me!"
 MAX_SUGGESTIONS = 10
-MAX_TIMEOUTS = 2
 
 user_pokemon_data = {} # Need to make this global so parser class can access it
 
@@ -82,7 +80,7 @@ if __name__ == "__main__":
     # Load up hidden API key located in a different file and set up chatbot model
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
-    chat_model = ChatOpenAI(model_name="gpt-4o", temperature=0, openai_api_key=api_key, request_timeout=10)
+    chat_model = ChatOpenAI(model_name="gpt-4o", temperature=0, openai_api_key=api_key)
     
     # Retrieve pokemon data from websites
     pkmn_obj = PKMN_DATA.PokemonData()
@@ -140,7 +138,6 @@ if __name__ == "__main__":
         result = ""
         key = ""
         response_count = 0
-        timeouts = 0
 
         # 2nd part of loop: Ensure either a pokemon is selected to converse with or user is done
         print("\nPokeDex: Please type in the pokemon's name or pokedex number to get started, press the TAB key "
@@ -238,7 +235,7 @@ if __name__ == "__main__":
             retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 20})
 
         # 5th part of loop: Converse with user until current conversation ends
-        while retriever and (ENDING_PHRASE.lower() not in result.lower() and timeouts <= MAX_TIMEOUTS):
+        while retriever and ENDING_PHRASE.lower() not in result.lower():
             response_count += 1
             
             # Skip user input on the very first response since we need to produce a prompt first
@@ -258,7 +255,7 @@ if __name__ == "__main__":
             # Insert prompt, input and formmatting into chat model and print the response
             chain = chat_prompt | chat_model | CustomParser()
 
-            # Be prepared to handle OpenAI timing out or not working...for a variety of reasons
+            # Be prepared to handle OpenAI not working... for a variety of reasons
             try:
                 result = chain.invoke(
                     {"pokemon_name":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
@@ -270,16 +267,6 @@ if __name__ == "__main__":
                     "context":relevant_context,
                     "chat_history":"\n".join(chat_history)}
                 )
-            except openai.APITimeoutError:
-                # Exit gracefully if there are too many timeouts
-                timeouts += 1
-                if timeouts > MAX_TIMEOUTS:
-                    result = "Sorry, I keep forgetting what I was going to say. Maybe we should chat later. " + \
-                        ENDING_PHRASE
-                elif response_count != 1:
-                    result = "Sorry, I forgot what I was going to say. Would you like to ask me something else?"
-                else:
-                    result = f"Hello, I'm {user_pokemon_data[PKMN_DATA.CSV_NAME_KEY]}. What would you like to ask me?"
             except Exception as e:
                 # Establish "technical issue" with the PokeDex
                 context_msg = "Sorry, I lost contact with"
@@ -303,12 +290,13 @@ if __name__ == "__main__":
                 is_running = False
                 break
 
-            # Print successfully generated response in the desired format
-            print_response(result)
+            else:
+                # Print successfully generated response in the desired format
+                print_response(result)
 
-            # keep track of the 20 most recent inputs & responses
-            chat_history.append("User: " + user_input)
-            chat_history.append("You: " + result)
-            chat_history = chat_history[-20:]
+                # keep track of the 20 most recent inputs & responses
+                chat_history.append("User: " + user_input)
+                chat_history.append("You: " + result)
+                chat_history = chat_history[-20:]
 
     print("\nPokeDex: Goodbye!")
