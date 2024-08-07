@@ -16,10 +16,9 @@ import create_pokemon_data as PKMN_DATA
 
 
 SPECIAL_CHARS_IN_NAMES = [".", " ", "-"]
-ENDING_PHRASE = "Thank you for talking to me!"
+ENDING_PHRASE = " Thank you for talking to me!"
 MAX_SUGGESTIONS = 10
-
-user_pokemon_data = {} # Need to make this global so parser class can access it
+MAX_RESPONSES = 10
 
 
 class CustomParser(BaseOutputParser):
@@ -37,12 +36,12 @@ class CustomParser(BaseOutputParser):
 # NOTE: This function was separated from the parser class above to address a formatting bug in the model's responses
 # Print out model response in this format -> [pokemon_name]([pokedex_id]): [speech]
 # Include the pokemon's speech pattern (ex. telepath, nosies, etc.) as well
-def print_response(text: str):
-    response = f"\n{user_pokemon_data[PKMN_DATA.CSV_NAME_KEY]} (#{str(user_pokemon_data[PKMN_DATA.CSV_ID_KEY])}): "
-    if user_pokemon_data[PKMN_DATA.CSV_SPEECH_KEY] == "telepathy":
+def print_response(pkmn_data: dict, text: str):
+    response = f"\n{pkmn_data[PKMN_DATA.CSV_NAME_KEY]} (#{str(pkmn_data[PKMN_DATA.CSV_ID_KEY])}): "
+    if pkmn_data[PKMN_DATA.CSV_SPEECH_KEY] == "telepathy":
         response += ("*Speaking telepathically* " + text)
-    elif user_pokemon_data[PKMN_DATA.CSV_SPEECH_KEY] == "noise":
-        response += ("*" + user_pokemon_data[PKMN_DATA.CSV_NAME_KEY] + " noises* (" + text + ")")
+    elif pkmn_data[PKMN_DATA.CSV_SPEECH_KEY] == "noise":
+        response += ("*" + pkmn_data[PKMN_DATA.CSV_NAME_KEY] + " noises* (" + text + ")")
     else:
         response += text
     print(response)
@@ -80,33 +79,24 @@ if __name__ == "__main__":
     # Load up hidden API key located in a different file and set up chatbot model
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
-    chat_model = ChatOpenAI(model_name="gpt-4o", temperature=0, openai_api_key=api_key)
     
     # Retrieve pokemon data from websites
     pkmn_obj = PKMN_DATA.PokemonData()
 
-    # Assign prompt & input
-    template = """
-        You are a Pokemon named {pokemon_name}, a {type} type from generation {gen}. You are having a conversation
-        with a user who wants to learn more about you and the Pokemon world you live in. Utilize the "Current
-        Response Count" and the "Conversation Rules" listed below when responding to the user.
+    # Assign prompt & inputs for Pokemon conversations
+    chat_model = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0, openai_api_key=api_key)
 
-        Current Response Count is {count}.
+    system_template = """
+        You are a Pokemon named {pokemon_name}, a {type} type from generation {gen}. You are having a conversation
+        with a user who wants to learn more about you and the Pokemon world you live in. Utilize the "Conversation
+        Rules", "Important Information" and "Chat History" sections listed below when responding to the user.
 
         Conversation Rules:
         1.  Keep your responses to 3 sentences max unless the user explicitly gives you a response length to follow.
         2.  Do not lie or make up answers. Use the information found in "Important Information" as additional context
             (if possible) when deciding on a response.
         3.  Use the conversation history in "Chat History" as additional context when evaluating the user's input.
-        4.  If the conversation ends, the user declines to ask you more questions or "Current Response Count" is 10
-            or greater, do not ask a question and append "{end_phrase}" to the end of your response.
-        5.  If the user's input is inappropriate, let the user know you don't feel comfortable responding and ask
-            another question about yourself.
-        6.  If the user's input is incomprehensible or empty, let the user know you don't understand their input and
-            ask another question about yourself.
-        7.  If the user asks something that is not related to the pokemon world or you in any way, let the user know
-            you don't know and ask another question about yourself.
-        8.  If the user asks you something and you don't know the answer, let the user know you don't know and ask
+        4.  If the user asks you something and you don't know the answer, let the user know you don't know and ask
             another question about yourself.
         
         Important Information:
@@ -117,7 +107,7 @@ if __name__ == "__main__":
     """
     human_template = "{text}"
 
-    system_message_prompt = SystemMessagePromptTemplate.from_template(template)
+    system_message_prompt = SystemMessagePromptTemplate.from_template(system_template)
     human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
 
     chat_prompt = ChatPromptTemplate.from_messages(
@@ -135,7 +125,7 @@ if __name__ == "__main__":
         chat_history = []
         user_input = ""
         retriever = ""
-        result = ""
+        chat_result = ""
         key = ""
         response_count = 0
 
@@ -235,7 +225,7 @@ if __name__ == "__main__":
             retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 20})
 
         # 5th part of loop: Converse with user until current conversation ends
-        while retriever and ENDING_PHRASE.lower() not in result.lower():
+        while retriever and response_count < MAX_RESPONSES:
             response_count += 1
             
             # Skip user input on the very first response since we need to produce a prompt first
@@ -252,21 +242,24 @@ if __name__ == "__main__":
             for idx, doc in enumerate(relevant_docs):
                 relevant_context += f"{idx+1}. {doc.page_content}\n"
 
-            # Insert prompt, input and formmatting into chat model and print the response
-            chain = chat_prompt | chat_model | CustomParser()
+            # Insert prompt, input and formmatting into chat & tagging models
+            chat_chain = chat_prompt | chat_model | CustomParser()
 
             # Be prepared to handle OpenAI not working... for a variety of reasons
             try:
-                result = chain.invoke(
+                chat_result = chat_chain.invoke(
                     {"pokemon_name":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
                     "type":user_pokemon_data[PKMN_DATA.CSV_TYPE_KEY],
                     "gen":user_pokemon_data[PKMN_DATA.CSV_GEN_KEY],
                     "text":user_input,
-                    "end_phrase":ENDING_PHRASE,
-                    "count":response_count,
                     "context":relevant_context,
                     "chat_history":"\n".join(chat_history)}
                 )
+
+                # Check if current conversation is done
+                if response_count >= MAX_RESPONSES:
+                    chat_result += ENDING_PHRASE
+
             except Exception as e:
                 # Establish "technical issue" with the PokeDex
                 context_msg = "Sorry, I lost contact with"
@@ -292,11 +285,10 @@ if __name__ == "__main__":
 
             else:
                 # Print successfully generated response in the desired format
-                print_response(result)
+                print_response(user_pokemon_data, chat_result)
 
-                # keep track of the 20 most recent inputs & responses
-                chat_history.append("User: " + user_input)
-                chat_history.append("You: " + result)
-                chat_history = chat_history[-20:]
+                # keep track of the current inputs & responses
+                chat_history.append("User Input: " + user_input)
+                chat_history.append("Your Output: " + chat_result)
 
     print("\nPokeDex: Goodbye!")
