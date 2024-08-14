@@ -26,7 +26,7 @@ FINISH_SCORE_THRESHOLD = 10
 CONVO_RULES_STANDARD = """
     * Keep your responses to 3 sentences max unless the user explicitly gives you a response length to follow.
     * Do not lie or make up answers. Use the information found in "Important Information" as additional context
-       (if possible) when deciding on a response.
+    (if possible) when deciding on a response.
     * Use the conversation history in "Chat History" as additional context when evaluating the user's input.
     * If the user asks you something and you don't know the answer, let the user know you don't know.
     * Do not change the subject of the conversation unless the user changes the subject themselves.
@@ -34,7 +34,7 @@ CONVO_RULES_STANDARD = """
 CONVO_RULES_REDIRECT = """
     * If the user asks or talks about something inappropriate, let them know you feel uncomfortable talking about it.
     * Else if the user asks or talks about something completely un-related to you or the world of Pokemon, let them
-       know you want to talk about you or the world of Pokemon.
+    know you want to talk about you or the world of Pokemon.
     * Else, let the user know you don't know how to respond to their input.
 """
 CONVO_RULES_EXIT = """
