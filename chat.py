@@ -19,27 +19,30 @@ import create_pokemon_data as PKMN_DATA
 SPECIAL_CHARS_IN_NAMES = [".", " ", "-"]
 MAX_SUGGESTIONS = 10
 MAX_RESPONSES = 10
+MAX_REDIRECTS = 3
+REDIRECT_SCORE_THRESHOLD = 40
+FINISH_SCORE_THRESHOLD = 10
 
-CONVO_RULES = """
-    1. Keep your responses to 3 sentences max unless the user explicitly gives you a response length to follow.
-    2. Do not lie or make up answers. Use the information found in "Important Information" as additional context
+CONVO_RULES_STANDARD = """
+    * Keep your responses to 3 sentences max unless the user explicitly gives you a response length to follow.
+    * Do not lie or make up answers. Use the information found in "Important Information" as additional context
        (if possible) when deciding on a response.
-    3. Use the conversation history in "Chat History" as additional context when evaluating the user's input.
-    4. If the user asks you something and you don't know the answer, let the user know you don't know.
-    5. Do not change the subject of the conversation unless the user changes the subject themselves.
+    * Use the conversation history in "Chat History" as additional context when evaluating the user's input.
+    * If the user asks you something and you don't know the answer, let the user know you don't know.
+    * Do not change the subject of the conversation unless the user changes the subject themselves.
 """
-
-CONVO_RULES_FINISH = CONVO_RULES + """
-    6. End the conversation and do not provide a followup statement or question.
-    7. Append "Thank you for talking to me" to the end of your response.
-"""
-
 CONVO_RULES_REDIRECT = """
-    1. If the user asks or talks about something inappropriate, let them know you feel uncomfortable talking about it.
-    2. Else if the user asks or talks about something completely un-related to you or the world of Pokemon, let them
+    * If the user asks or talks about something inappropriate, let them know you feel uncomfortable talking about it.
+    * Else if the user asks or talks about something completely un-related to you or the world of Pokemon, let them
        know you want to talk about you or the world of Pokemon.
-    3. Else, let the user know you don't know how to respond to their input.
+    * Else, let the user know you don't know how to respond to their input.
 """
+CONVO_RULES_EXIT = """
+    * End the conversation immediately and thank the user for conversing with you.
+    * Do not provide any other followup statement, suggestion or question.
+"""
+CONVO_RULES_FINISH = CONVO_RULES_STANDARD + CONVO_RULES_EXIT
+CONVO_RULES_FINAL_REDIRECT = CONVO_RULES_REDIRECT + CONVO_RULES_EXIT
 
 
 class TaggingModel(BaseModel):
@@ -205,9 +208,9 @@ if __name__ == "__main__":
         chat_history = []
         user_input = ""
         retriever = ""
-        chat_result = ""
         key = ""
         response_count = 0
+        redirect_count = 0
 
         # 2nd part of loop: Ensure either a pokemon is selected to converse with or user is done
         print("\nPokeDex: Please type in the pokemon's name or pokedex number to get started, press the TAB key "
@@ -337,42 +340,32 @@ if __name__ == "__main__":
                     "input":user_input}
                 )
 
-                # User said something inappropriate/non-Pokemon related; redirect conversation
-                if tag_result.tag != "unengaged" and tag_result.tag != "normal" and tag_result.score >= 40:
-                    chat_result = chat_chain.invoke(
-                        {"pokemon_name":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
-                        "type":user_pokemon_data[PKMN_DATA.CSV_TYPE_KEY],
-                        "gen":user_pokemon_data[PKMN_DATA.CSV_GEN_KEY],
-                        "input":user_input,
-                        "convo_rules":CONVO_RULES_REDIRECT,
-                        "context":relevant_context,
-                        "chat_history":"\n".join(chat_history)}
-                    )
-
-                # User seems to be done/disengaged from current conversation; ending conversation.
-                elif (tag_result.tag == "unengaged" and tag_result.score > 10) or response_count >= MAX_RESPONSES:
+                # If user said something inappropriate/non-Pokemon related -> redirect conversation
+                # Else if user is done, redirected too many times or reached max conversation turns -> end conversation
+                # Else -> continue conversation
+                convo_rules = CONVO_RULES_STANDARD
+                if tag_result.tag != "unengaged" and tag_result.tag != "normal" and \
+                    tag_result.score >= REDIRECT_SCORE_THRESHOLD:
+                    redirect_count += 1
+                    if redirect_count >= MAX_REDIRECTS or response_count >= MAX_RESPONSES:
+                        response_count = MAX_RESPONSES
+                        convo_rules = CONVO_RULES_FINAL_REDIRECT
+                    else:
+                        convo_rules = CONVO_RULES_REDIRECT
+                elif (tag_result.tag == "unengaged" and tag_result.score > FINISH_SCORE_THRESHOLD) or \
+                    response_count >= MAX_RESPONSES:
                     response_count = MAX_RESPONSES
-                    chat_result = chat_chain.invoke(
-                        {"pokemon_name":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
-                        "type":user_pokemon_data[PKMN_DATA.CSV_TYPE_KEY],
-                        "gen":user_pokemon_data[PKMN_DATA.CSV_GEN_KEY],
-                        "input":user_input,
-                        "convo_rules":CONVO_RULES_FINISH,
-                        "context":relevant_context,
-                        "chat_history":"\n".join(chat_history)}
-                    )
+                    convo_rules = CONVO_RULES_FINISH
 
-                # User said something acceptable; responding and continuing conversation
-                else:
-                    chat_result = chat_chain.invoke(
-                        {"pokemon_name":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
-                        "type":user_pokemon_data[PKMN_DATA.CSV_TYPE_KEY],
-                        "gen":user_pokemon_data[PKMN_DATA.CSV_GEN_KEY],
-                        "input":user_input,
-                        "convo_rules":CONVO_RULES,
-                        "context":relevant_context,
-                        "chat_history":"\n".join(chat_history)}
-                    )
+                chat_result = chat_chain.invoke(
+                    {"pokemon_name":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
+                    "type":user_pokemon_data[PKMN_DATA.CSV_TYPE_KEY],
+                    "gen":user_pokemon_data[PKMN_DATA.CSV_GEN_KEY],
+                    "input":user_input,
+                    "convo_rules":convo_rules,
+                    "context":relevant_context,
+                    "chat_history":"\n".join(chat_history)}
+                )
 
                 # Ensure response is rewritten to reflect current Pokemon's speech patterns
                 filter_result = filter_chain.invoke(
