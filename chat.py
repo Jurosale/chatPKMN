@@ -8,6 +8,7 @@ from langchain_community.document_loaders import TextLoader, WebBaseLoader
 from langchain_community.vectorstores import Chroma
 from langchain_core.output_parsers import BaseOutputParser
 from langchain_core.prompts.chat import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
+from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import requests
@@ -16,9 +17,46 @@ import create_pokemon_data as PKMN_DATA
 
 
 SPECIAL_CHARS_IN_NAMES = [".", " ", "-"]
-ENDING_PHRASE = " Thank you for talking to me!"
 MAX_SUGGESTIONS = 10
 MAX_RESPONSES = 10
+
+CONVO_RULES = """
+    1. Keep your responses to 3 sentences max unless the user explicitly gives you a response length to follow.
+    2. Do not lie or make up answers. Use the information found in "Important Information" as additional context
+       (if possible) when deciding on a response.
+    3. Use the conversation history in "Chat History" as additional context when evaluating the user's input.
+    4. If the user asks you something and you don't know the answer, let the user know you don't know.
+    5. Do not change the subject of the conversation unless the user changes the subject themselves.
+"""
+
+CONVO_RULES_FINISH = CONVO_RULES + """
+    6. End the conversation and do not provide a followup statement or question.
+    7. Append "Thank you for talking to me" to the end of your response.
+"""
+
+CONVO_RULES_REDIRECT = """
+    1. If the user asks or talks about something inappropriate, let them know you feel uncomfortable talking about it.
+    2. Else if the user asks or talks about something completely un-related to you or the world of Pokemon, let them
+       know you want to talk about you or the world of Pokemon.
+    3. Else, let the user know you don't know how to respond to their input.
+"""
+
+
+class TaggingModel(BaseModel):
+    """
+    This tagging object takes the user's input and returns the tag and confidence scores
+    """
+    tag: str = Field(
+        ...,
+        description="how the text was tagged.",
+        enum=["inappropriate", "irrelevant", "unengaged", "normal"]
+    )
+
+    score: int = Field(
+        ...,
+        description="how confident the AI is in their tagging of the text.",
+        enum=[x for x in range(100)]
+    )
 
 
 class CustomParser(BaseOutputParser):
@@ -27,7 +65,7 @@ class CustomParser(BaseOutputParser):
     """
     def parse(self, text: str) -> str:
         # Filter out newlines and multiple whitespaces for a cleaner text display
-        formatted_text = text.replace("\n"," ")
+        formatted_text = text.replace("\n"," ").strip()
         while "  " in formatted_text:
             formatted_text.replace("  ", " ")
         return formatted_text
@@ -83,35 +121,77 @@ if __name__ == "__main__":
     # Retrieve pokemon data from websites
     pkmn_obj = PKMN_DATA.PokemonData()
 
-    # Assign prompt & inputs for Pokemon conversations
+    # Assign LLM for Pokemon conversations
     chat_model = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0, openai_api_key=api_key)
+    structured_chat_model = chat_model.with_structured_output(TaggingModel)
 
-    system_template = """
+    # Assign prompt & inputs for Pokemon conversations
+    # User inputs
+    human_template = "{input}"
+    human_message = HumanMessagePromptTemplate.from_template(human_template)
+
+    # Prompt to tag user's input and determine best course of action
+    tag_template = """
+        You are an AI assistant taking on the persona of a Pokemon named {pokemon_name}. Using one of the following
+        tags and their criteria below, assign a tag to the user's input and confidence score. Your task is to return
+        the properties mentioned in the "TaggingModel" function.
+
+        TAGS:
+        1. inappropriate - the input contains offensive language, hateful speech or explicit content.
+        2. irrelevant - the input is not related to your Pokemon character or Pokémon in general (including characters,
+           games, strategies, lore, etc).
+        3. unengaged - the input ends the current conversation.
+        4. normal - the input does not meet any of the above mentioned categories.
+
+        EXAMPLES:
+        User Input: "Your game is stupid and anyone who plays it is an idiot."
+        Your Tag: "inappropriate"
+
+        User Input: "What's the weather like today?"
+        Your Tag: "irrelevant"
+
+        User Input: "I don't have anything else to ask."
+        Your Tag: "unengaged"
+
+        User Input: "What's the best strategy for defeating a Dragonite in Pokémon Go?"
+        Your Tag: "normal"
+
+        SCORE:
+        An integer between 0 and 99 where a higher value means a higher confidence in the assigned tag.
+    """
+    tag_message = SystemMessagePromptTemplate.from_template(tag_template)
+    tag_prompt = ChatPromptTemplate.from_messages(
+        [tag_message, human_message]
+    )
+
+    # Prompt to produce response to user's input
+    chat_template = """
         You are a Pokemon named {pokemon_name}, a {type} type from generation {gen}. You are having a conversation
         with a user who wants to learn more about you and the Pokemon world you live in. Utilize the "Conversation
         Rules", "Important Information" and "Chat History" sections listed below when responding to the user.
 
         Conversation Rules:
-        1.  Keep your responses to 3 sentences max unless the user explicitly gives you a response length to follow.
-        2.  Do not lie or make up answers. Use the information found in "Important Information" as additional context
-            (if possible) when deciding on a response.
-        3.  Use the conversation history in "Chat History" as additional context when evaluating the user's input.
-        4.  If the user asks you something and you don't know the answer, let the user know you don't know and ask
-            another question about yourself.
-        
+        {convo_rules}
+
         Important Information:
         {context}
-        
+
         Chat History:
         {chat_history}
     """
-    human_template = "{text}"
-
-    system_message_prompt = SystemMessagePromptTemplate.from_template(system_template)
-    human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
-
+    chat_message = SystemMessagePromptTemplate.from_template(chat_template)
     chat_prompt = ChatPromptTemplate.from_messages(
-        [system_message_prompt, human_message_prompt]
+        [chat_message, human_message]
+    )
+
+    # Prompt to produce response to user's input
+    filter_template = """
+        You are a Pokemon named {pokemon_name}, a {type} type from generation {gen}. Rephrase the user's input using
+        your known speech patterns.
+    """
+    filter_message = SystemMessagePromptTemplate.from_template(filter_template)
+    filter_prompt = ChatPromptTemplate.from_messages(
+        [filter_message, human_message]
     )
 
     print("\nPokeDex: Hello, I am a virtual pokedex. I can help you talk to your favorite pokemon!")
@@ -206,7 +286,7 @@ if __name__ == "__main__":
 
                 # Write data as a text file and append its content into the document object
                 other_file_path = os.path.join(PKMN_DATA.EXTRA_FILES_DIR,
-                    user_pokemon_data[PKMN_DATA.CSV_NAME_KEY] + '.txt')
+                    str(user_pokemon_data[PKMN_DATA.CSV_ID_KEY]) + '.txt')
                 with open(other_file_path, "w") as f:
                     f.write(text_data)
                 curr_loader = TextLoader(other_file_path)
@@ -222,7 +302,7 @@ if __name__ == "__main__":
             vectorstore = Chroma.from_documents(documents=split_all_data, embedding=OpenAIEmbeddings())
 
             # Set the retriever and filtering parameters
-            retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 20})
+            retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 5})
 
         # 5th part of loop: Converse with user until current conversation ends
         while retriever and response_count < MAX_RESPONSES:
@@ -230,7 +310,9 @@ if __name__ == "__main__":
             
             # Skip user input on the very first response since we need to produce a prompt first
             if response_count != 1:
-                user_input = input("  -> ")
+                user_input = ""
+                while not user_input:
+                    user_input = input("  -> ")
             else:
                 user_input = "Tell me about yourself (in the first person point of view) and include " + \
                     "a suggestion to ask you a question about yourself or the Pokemon world you live in."
@@ -243,22 +325,62 @@ if __name__ == "__main__":
                 relevant_context += f"{idx+1}. {doc.page_content}\n"
 
             # Insert prompt, input and formmatting into chat & tagging models
+            tag_chain = tag_prompt | structured_chat_model
             chat_chain = chat_prompt | chat_model | CustomParser()
+            filter_chain = filter_prompt | chat_model | CustomParser()
 
             # Be prepared to handle OpenAI not working... for a variety of reasons
             try:
-                chat_result = chat_chain.invoke(
+                # Tag user's input to determine what to do next
+                tag_result = tag_chain.invoke(
+                    {"pokemon_name":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
+                    "input":user_input}
+                )
+
+                # User said something inappropriate/non-Pokemon related; redirect conversation
+                if tag_result.tag != "unengaged" and tag_result.tag != "normal" and tag_result.score >= 40:
+                    chat_result = chat_chain.invoke(
+                        {"pokemon_name":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
+                        "type":user_pokemon_data[PKMN_DATA.CSV_TYPE_KEY],
+                        "gen":user_pokemon_data[PKMN_DATA.CSV_GEN_KEY],
+                        "input":user_input,
+                        "convo_rules":CONVO_RULES_REDIRECT,
+                        "context":relevant_context,
+                        "chat_history":"\n".join(chat_history)}
+                    )
+
+                # User seems to be done/disengaged from current conversation; ending conversation.
+                elif (tag_result.tag == "unengaged" and tag_result.score > 10) or response_count >= MAX_RESPONSES:
+                    response_count = MAX_RESPONSES
+                    chat_result = chat_chain.invoke(
+                        {"pokemon_name":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
+                        "type":user_pokemon_data[PKMN_DATA.CSV_TYPE_KEY],
+                        "gen":user_pokemon_data[PKMN_DATA.CSV_GEN_KEY],
+                        "input":user_input,
+                        "convo_rules":CONVO_RULES_FINISH,
+                        "context":relevant_context,
+                        "chat_history":"\n".join(chat_history)}
+                    )
+
+                # User said something acceptable; responding and continuing conversation
+                else:
+                    chat_result = chat_chain.invoke(
+                        {"pokemon_name":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
+                        "type":user_pokemon_data[PKMN_DATA.CSV_TYPE_KEY],
+                        "gen":user_pokemon_data[PKMN_DATA.CSV_GEN_KEY],
+                        "input":user_input,
+                        "convo_rules":CONVO_RULES,
+                        "context":relevant_context,
+                        "chat_history":"\n".join(chat_history)}
+                    )
+
+                # Ensure response is rewritten to reflect current Pokemon's speech patterns
+                filter_result = filter_chain.invoke(
                     {"pokemon_name":user_pokemon_data[PKMN_DATA.CSV_NAME_KEY],
                     "type":user_pokemon_data[PKMN_DATA.CSV_TYPE_KEY],
                     "gen":user_pokemon_data[PKMN_DATA.CSV_GEN_KEY],
-                    "text":user_input,
-                    "context":relevant_context,
-                    "chat_history":"\n".join(chat_history)}
+                    "input":chat_result}
                 )
-
-                # Check if current conversation is done
-                if response_count >= MAX_RESPONSES:
-                    chat_result += ENDING_PHRASE
 
             except Exception as e:
                 # Establish "technical issue" with the PokeDex
@@ -285,10 +407,12 @@ if __name__ == "__main__":
 
             else:
                 # Print successfully generated response in the desired format
-                print_response(user_pokemon_data, chat_result)
+                print_response(user_pokemon_data, filter_result)
 
-                # keep track of the current inputs & responses
-                chat_history.append("User Input: " + user_input)
-                chat_history.append("Your Output: " + chat_result)
+                # Keep track of the current inputs & responses
+                # Ignore 1st input since it's designed to get the pokemon to start the conversation
+                if response_count != 1:
+                    chat_history.append("User Input: " + user_input)
+                chat_history.append("Your Output: " + filter_result)
 
     print("\nPokeDex: Goodbye!")
