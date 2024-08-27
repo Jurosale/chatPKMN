@@ -297,7 +297,7 @@ if __name__ == "__main__":
 
             # Split data into chunks for easier lookup
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000, chunk_overlap=200, add_start_index=True
+                chunk_size=150, chunk_overlap=100, add_start_index=True
             )
             split_all_data = text_splitter.split_documents(all_data)
 
