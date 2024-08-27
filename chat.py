@@ -34,12 +34,12 @@ CONVO_RULES_STANDARD = """
 CONVO_RULES_REDIRECT = """
     * If the user asks or talks about something inappropriate, let them know you feel uncomfortable talking about it.
     * Else if the user asks or talks about something completely un-related to you or the world of Pokemon, let them
-    know you want to talk about you or the world of Pokemon.
+    know you're only knowledgeable about you or the world of Pokemon.
     * Else, let the user know you don't know how to respond to their input.
 """
 CONVO_RULES_EXIT = """
-    * End the conversation immediately and thank the user for conversing with you.
-    * Do not provide any other followup statement, suggestion or question.
+    * Thank the user for conversing with you and let them know you need to leave now.
+    * Do not ask a question, make a suggestion or encourage the user to continue the conversation in your response.
 """
 CONVO_RULES_FINISH = CONVO_RULES_STANDARD + CONVO_RULES_EXIT
 CONVO_RULES_FINAL_REDIRECT = CONVO_RULES_REDIRECT + CONVO_RULES_EXIT
